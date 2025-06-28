@@ -28,7 +28,7 @@ const MapContent = dynamic(
       return function Map({ onMapClick }: { onMapClick: (coords: Coordinates) => void }) {
         return (
           <MapContainer
-            center={[51.505, -0.09]} // Default to London
+            center={[43.6532, -79.3832]} // Default to toronto
             zoom={13}
             style={{ height: "100%", width: "100%" }}
             className="z-0"
