@@ -6,7 +6,7 @@ import { Geist } from "next/font/google";
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
-  title: "Speed Shield - James.",
+  title: "Speed Shield",
   description: "bruh",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };

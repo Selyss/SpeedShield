@@ -4,3 +4,5 @@ shapely==2.1.1
 statsmodels==0.14.4
 numpy==2.3.1
 scipy==1.15.3
+matplotlib==3.8.2
+seaborn==0.13.0
