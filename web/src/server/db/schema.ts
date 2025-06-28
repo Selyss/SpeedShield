@@ -35,3 +35,18 @@ export const locations = createTable(
     longitude: d.real().notNull(),
   })
 );
+
+export const markers = createTable(
+  "marker",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    name: d.varchar({ length: 256 }),
+    latitude: d.doublePrecision().notNull(),
+    longitude: d.doublePrecision().notNull(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+  })
+)
