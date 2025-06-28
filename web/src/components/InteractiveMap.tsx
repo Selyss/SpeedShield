@@ -2,7 +2,12 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 
 interface Coordinates {
@@ -15,8 +20,12 @@ const MapContent = dynamic(
   () =>
     import("react-leaflet").then((mod) => {
       const { MapContainer, TileLayer, useMapEvents } = mod;
-      
-      function MapClickHandler({ onMapClick }: { onMapClick: (coords: Coordinates) => void }) {
+
+      function MapClickHandler({
+        onMapClick,
+      }: {
+        onMapClick: (coords: Coordinates) => void;
+      }) {
         useMapEvents({
           click: (e) => {
             onMapClick({ lat: e.latlng.lat, lng: e.latlng.lng });
@@ -25,7 +34,11 @@ const MapContent = dynamic(
         return null;
       }
 
-      return function Map({ onMapClick }: { onMapClick: (coords: Coordinates) => void }) {
+      return function Map({
+        onMapClick,
+      }: {
+        onMapClick: (coords: Coordinates) => void;
+      }) {
         return (
           <MapContainer
             center={[43.6532, -79.3832]} // Default to toronto
@@ -44,11 +57,13 @@ const MapContent = dynamic(
     }),
   {
     ssr: false,
-  }
+  },
 );
 
 export default function InteractiveMap() {
-  const [selectedCoords, setSelectedCoords] = useState<Coordinates | null>(null);
+  const [selectedCoords, setSelectedCoords] = useState<Coordinates | null>(
+    null,
+  );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
@@ -105,13 +120,16 @@ export default function InteractiveMap() {
               <div className="space-y-2">
                 <div className="text-sm text-gray-600">Formatted:</div>
                 <div className="rounded bg-gray-100 p-2 font-mono text-sm">
-                  {selectedCoords.lat.toFixed(6)}, {selectedCoords.lng.toFixed(6)}
+                  {selectedCoords.lat.toFixed(6)},{" "}
+                  {selectedCoords.lng.toFixed(6)}
                 </div>
               </div>
               <div className="flex space-x-2">
                 <Button
                   onClick={() =>
-                    copyToClipboard(`${selectedCoords.lat.toFixed(6)}, ${selectedCoords.lng.toFixed(6)}`)
+                    copyToClipboard(
+                      `${selectedCoords.lat.toFixed(6)}, ${selectedCoords.lng.toFixed(6)}`,
+                    )
                   }
                   variant="outline"
                   size="sm"
@@ -122,7 +140,7 @@ export default function InteractiveMap() {
                 <Button
                   onClick={() =>
                     copyToClipboard(
-                      `https://www.openstreetmap.org/#map=18/${selectedCoords.lat}/${selectedCoords.lng}`
+                      `https://www.openstreetmap.org/#map=18/${selectedCoords.lat}/${selectedCoords.lng}`,
                     )
                   }
                   variant="outline"
