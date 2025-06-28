@@ -25,3 +25,19 @@ export const posts = createTable(
   }),
   (t) => [index("name_idx").on(t.name)]
 );
+
+export const markers = createTable(
+  "marker",
+  (d) => ({
+    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+    name: d.varchar({ length: 256 }),
+    latitude: d.doublePrecision().notNull(),
+    longitude: d.doublePrecision().notNull(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+  }),
+  (t) => [index("marker_lat_lng_idx").on(t.latitude, t.longitude)]
+)
