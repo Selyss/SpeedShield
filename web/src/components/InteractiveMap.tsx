@@ -11,6 +11,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import L from "leaflet";
+import { Circle, LayersControl } from "react-leaflet";
 
 interface DialogData
   extends Record<string, string | number | boolean | Date | null | undefined> {
@@ -72,26 +73,39 @@ const MapContent = dynamic(
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+            <LayersControl position="topright">
+              <LayersControl.Overlay name="Schools">
+                <Circle
+                  center={[43.6532, -79.3832]} // example school
+                  radius={500} // 500m radius
+                  pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 0.1 }}
+                />
+              </LayersControl.Overlay>
+              <LayersControl.Overlay checked name="Markers">
+                <>
+                  {markers.map((marker) => (
+                    <Marker
+                      key={marker.id}
+                      position={[marker.latitude, marker.longitude]}
+                      icon={markerIcon}
+                      eventHandlers={{
+                        click: () =>
+                          dialogHandler({
+                            title: marker.name ?? `Marker ${marker.id}`,
+                            id: marker.id,
+                            name: marker.name,
+                            latitude: marker.latitude,
+                            longitude: marker.longitude,
+                            createdAt: marker.createdAt,
+                            updatedAt: marker.updatedAt,
+                          }),
+                      }}
+                    ></Marker>
+                  ))}
+                </>
+              </LayersControl.Overlay>
+            </LayersControl>
             <MapClickHandler onMapClick={dialogHandler} />{" "}
-            {markers.map((marker) => (
-              <Marker
-                key={marker.id}
-                position={[marker.latitude, marker.longitude]}
-                icon={markerIcon}
-                eventHandlers={{
-                  click: () =>
-                    dialogHandler({
-                      title: marker.name ?? `Marker ${marker.id}`,
-                      id: marker.id,
-                      name: marker.name,
-                      latitude: marker.latitude,
-                      longitude: marker.longitude,
-                      createdAt: marker.createdAt,
-                      updatedAt: marker.updatedAt,
-                    }),
-                }}
-              ></Marker>
-            ))}
           </MapContainer>
         );
       };
