@@ -28,7 +28,19 @@ interface Marker {
 }
 
 const markerIcon = L.divIcon({
-  html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-icon lucide-map-pin"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`,
+  // html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-icon lucide-map-pin"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`,
+  html: `
+    <svg width="25" height="25" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" preserveAspectRatio="xMidYMid meet">
+      <path fill="#31373D" d="M0 10s0-4 4-4h28s4 0 4 4v18s0 4-4 4H4s-4 0-4-4V10z"></path>
+      <circle fill="#CCD6DD" cx="21" cy="19" r="10"></circle>
+      <circle fill="#31373D" cx="21" cy="19" r="8"></circle>
+      <circle fill="#3B88C3" cx="21" cy="19" r="5"></circle>
+      <circle fill="#FFF" cx="32.5" cy="9.5" r="1.5"></circle>
+      <path fill="#FFAC33" d="M16 9l3-6l-6 2l-4-5l-2 5l-6-1l4 6l-5 4h6l-2 6l6-3l6 5l-1-8l6-1z"></path>
+      <path fill="#FFF" d="M10 14l-3 2l1-3l-3-1l3-2l-3-3h4l1-3l2 3l3-1l-2 3l3 3l-3 1l1 4z"></path>
+    </svg>
+  `,
+
   iconAnchor: [12, 24], // Center the icon at the bottom
   className: "marker-icon", // Custom class for styling
 });
