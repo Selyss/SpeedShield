@@ -1,0 +1,17 @@
+"use client";
+
+import dynamic from "next/dynamic";
+
+// Dynamically import the map component to avoid SSR issues
+const InteractiveMap = dynamic(() => import("~/components/InteractiveMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-screen w-full items-center justify-center bg-gray-100">
+      <div className="text-lg">Loading map...</div>
+    </div>
+  ),
+});
+
+export default function MapPage() {
+  return <InteractiveMap />;
+}
