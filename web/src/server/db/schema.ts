@@ -25,17 +25,6 @@ export const createTable = pgTableCreator((name) => `speedshield_${name}`);
 //   }),
 //   (t) => [index("name_idx").on(t.name)]
 // );
-
-export const locations = createTable(
-  "location",
-  (d) => ({
-    id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
-    name: d.varchar({ length: 256 }).notNull(),
-    latitude: d.real().notNull(),
-    longitude: d.real().notNull(),
-  })
-);
-
 export const markers = createTable(
   "marker",
   (d) => ({
