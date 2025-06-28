@@ -9,17 +9,35 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { api } from "~/trpc/react";
+import L from "leaflet";
+
 
 interface Coordinates {
   lat: number;
   lng: number;
 }
 
+interface Marker {
+  id: number;
+  name: string | null;
+  latitude: number;
+  longitude: number;
+  createdAt: Date;
+  updatedAt: Date | null;
+}
+
+const markerIcon = L.divIcon({
+    html:`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-icon lucide-map-pin"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`,
+    iconAnchor: [12, 24], // Center the icon at the bottom
+    className: "marker-icon", // Custom class for styling
+});
+
 // Create a separate component for the map content that will be dynamically loaded
 const MapContent = dynamic(
   () =>
     import("react-leaflet").then((mod) => {
-      const { MapContainer, TileLayer, useMapEvents } = mod;
+      const { MapContainer, TileLayer, useMapEvents, Marker, Popup } = mod;
 
       function MapClickHandler({
         onMapClick,
@@ -36,8 +54,10 @@ const MapContent = dynamic(
 
       return function Map({
         onMapClick,
+        markers,
       }: {
         onMapClick: (coords: Coordinates) => void;
+        markers: Marker[];
       }) {
         return (
           <MapContainer
@@ -51,6 +71,16 @@ const MapContent = dynamic(
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <MapClickHandler onMapClick={onMapClick} />
+            {markers.map((marker) => (
+              <Marker
+                key={marker.id}
+                position={[marker.latitude, marker.longitude]}
+                icon={markerIcon}
+              >
+                <Popup className="">
+                </Popup>
+              </Marker>
+            ))}
           </MapContainer>
         );
       };
@@ -66,6 +96,10 @@ export default function InteractiveMap() {
   );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+
+  // Fetch markers from the database
+  const { data: markers = [], isLoading: markersLoading } =
+    api.markers.getAll.useQuery();
 
   useEffect(() => {
     setIsClient(true);
@@ -83,8 +117,7 @@ export default function InteractiveMap() {
       console.error("Failed to copy: ", err);
     }
   };
-
-  if (!isClient) {
+  if (!isClient || markersLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-100">
         <div className="text-lg">Loading map...</div>
@@ -95,7 +128,7 @@ export default function InteractiveMap() {
   return (
     <>
       <div className="h-screen w-full">
-        <MapContent onMapClick={handleMapClick} />
+        <MapContent onMapClick={handleMapClick} markers={markers} />
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
