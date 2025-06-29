@@ -95,6 +95,16 @@ def fit_model(features):
         school_risk = features['near_school'].astype(int) + features['in_school_zone'].astype(int)
         X['school_risk_factor'] = np.minimum(school_risk, 2)  # cap at 2 for sites that are both near schools AND in zones
     
+    if 'near_retirement_home' in features:
+        X['near_retirement_home'] = features['near_retirement_home'].astype(int)
+        # create a combined vulnerable population risk factor (schools + retirement homes)
+        vulnerable_pop_risk = 0
+        if 'near_school' in features:
+            vulnerable_pop_risk += features['near_school'].astype(int)
+        if 'near_retirement_home' in features:
+            vulnerable_pop_risk += features['near_retirement_home'].astype(int) * 0.8  # weight retirement homes slightly less than schools
+        X['vulnerable_population_risk'] = vulnerable_pop_risk
+    
     if 'dist_to_nearest_camera' in features and 'cameras_within_500m' in features:
         X['enforcement_gap'] = features['dist_to_nearest_camera'] / (1 + features['cameras_within_500m'])
 
