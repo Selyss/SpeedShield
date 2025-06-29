@@ -1,13 +1,9 @@
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
-import statsmodels.api as sm
 import numpy as np
 import os
 import glob
-import matplotlib.pyplot as plt
-import seaborn as sns
-from scipy import stats
 
 def load_data():
     """
@@ -347,7 +343,7 @@ def preprocess(svc, coll, schools, tmc, buffer_m=100, school_buf_m=200):
     # Prepare final DataFrame with flexible column selection
     # Start with coordinates as first columns
     coordinate_cols = ['longitude', 'latitude']
-    required_cols = ['latest_count_id', 'collision_count', 'veh_km', 'near_school', 'total_vehicle', 'total_pedestrian', 'total_bike']
+    required_cols = ['latest_count_id', 'collision_count', 'veh_km', 'near_school']
     
     # Add available traffic columns
     traffic_cols = ['avg_daily_vol', 'avg_speed', 'avg_85th_percentile_speed', 'avg_95th_percentile_speed', 'avg_heavy_pct']
@@ -365,277 +361,46 @@ def preprocess(svc, coll, schools, tmc, buffer_m=100, school_buf_m=200):
     features = svc_gdf[available_final_cols].copy()
     return features
 
-def fit_poisson(features):
-    # Prepare design matrix with available columns
-    y = features['collision_count']
-    
-    # Define preferred features in order of preference
-    preferred_features = ['avg_daily_vol', 'avg_speed', 'avg_85th_percentile_speed',
-                         'avg_95th_percentile_speed', 'avg_heavy_pct',
-                         'near_school', 'total_vehicle', 'total_pedestrian', 'total_bike']
-    
-    # Select available features
-    available_features = [col for col in preferred_features if col in features.columns]
-    
-    if not available_features:
-        print("Warning: No standard features found, using all numeric columns except ID and target")
-        # Fall back to any numeric columns
-        numeric_cols = features.select_dtypes(include=[np.number]).columns
-        available_features = [col for col in numeric_cols 
-                            if col not in ['latest_count_id', 'collision_count', 'veh_km']]
-    
-    print(f"Using features for modeling: {available_features}")
-    
-    if not available_features:
-        raise ValueError("No suitable features found for modeling")
-    
-    X = features[available_features].copy()
-    
-    # Ensure all features are numeric
-    for col in X.columns:
-        if X[col].dtype == 'object':
-            print(f"Converting {col} to numeric...")
-            X[col] = pd.to_numeric(X[col], errors='coerce')
-        
-        # Handle boolean columns
-        if X[col].dtype == 'bool':
-            X[col] = X[col].astype(int)
-    
-    # Fill any NaN values that might have been created during conversion
-    X = X.fillna(0)
-    
-    # Check for any remaining non-numeric data
-    non_numeric_cols = X.select_dtypes(exclude=[np.number]).columns
-    if len(non_numeric_cols) > 0:
-        print(f"Warning: Dropping non-numeric columns: {list(non_numeric_cols)}")
-        X = X.select_dtypes(include=[np.number])
-    
-    if X.empty:
-        raise ValueError("No numeric features available for modeling")
-    
-    print(f"Final feature matrix shape: {X.shape}")
-    print(f"Feature data types: {X.dtypes.to_dict()}")
-    
-    X = sm.add_constant(X)
-    offset = np.log(features['veh_km'] + 1e-6)
-    
-    print("Fitting Poisson GLM...")
-    try:
-        model = sm.GLM(y, X, family=sm.families.Poisson(), offset=offset).fit()
-        features['lambda_hat'] = model.predict(X, offset=offset)
-        features['predicted_risk'] = features['lambda_hat'] / features['veh_km']
-        
-        print("Model fitted successfully!")
-        print(f"Model summary:")
-        print(f"AIC: {model.aic:.2f}")
-        print(f"Deviance: {model.deviance:.2f}")
-        
-        return model, features
-    except Exception as e:
-        print(f"Error fitting model: {e}")
-        print("Attempting simplified model with fewer features...")
-        
-        # Try with just the most important features
-        simple_features = [col for col in ['avg_daily_vol', 'near_school'] if col in X.columns]
-        if simple_features:
-            X_simple = sm.add_constant(X[simple_features])
-            model = sm.GLM(y, X_simple, family=sm.families.Poisson(), offset=offset).fit()
-            features['lambda_hat'] = model.predict(X_simple, offset=offset)
-            features['predicted_risk'] = features['lambda_hat'] / features['veh_km']
-            print("Simplified model fitted successfully!")
-            return model, features
-        else:
-            raise
-
-def add_percentiles_and_visualize(results):
+def save_training_data(features, output_file="training_data.csv"):
     """
-    Add percentile scores to the results and create visualizations.
+    Save the prepared training data for use by the modeling pipeline.
+    
+    Parameters:
+    features (pd.DataFrame): Processed features dataframe
+    output_file (str): Output filename for training data
     """
-    print("Calculating percentiles and creating visualizations...")
+    # Ensure coordinates are first columns in output
+    output_cols = ['longitude', 'latitude']
+    required_cols = ['latest_count_id', 'collision_count', 'veh_km', 'near_school']
     
-    # Calculate percentiles for predicted_risk
-    results['risk_percentile'] = stats.rankdata(results['predicted_risk'], method='average') / len(results) * 100
+    # Add available traffic/risk columns
+    traffic_cols = ['avg_daily_vol', 'avg_speed', 'avg_85th_percentile_speed', 
+                   'avg_95th_percentile_speed', 'avg_heavy_pct']
+    available_traffic_cols = [col for col in traffic_cols if col in features.columns]
     
-    # Create risk categories based on percentiles
-    results['risk_category'] = pd.cut(results['risk_percentile'], 
-                                    bins=[0, 50, 75, 90, 95, 100],
-                                    labels=['Low', 'Medium', 'High', 'Very High', 'Critical'],
-                                    include_lowest=True)
+    # Combine all columns with coordinates first
+    final_cols = output_cols + required_cols + available_traffic_cols
+    available_final_cols = [col for col in final_cols if col in features.columns]
     
-    # Set up the plotting style
-    plt.style.use('seaborn-v0_8')
-    sns.set_palette("viridis")
+    # Reorder columns and save
+    features_ordered = features[available_final_cols]
+    features_ordered.to_csv(output_file, index=False)
     
-    # Create a figure with multiple subplots
-    fig = plt.figure(figsize=(20, 16))
+    print(f"\nTraining data saved to {output_file}")
+    print(f"Processed {len(features)} sites")
+    print(f"Training data columns: {available_final_cols}")
+    print(f"Sample data preview:")
+    print(features_ordered.head().to_string(index=False))
     
-    # 1. Risk Distribution Histogram
-    plt.subplot(3, 3, 1)
-    plt.hist(results['predicted_risk'], bins=50, alpha=0.7, color='skyblue', edgecolor='black')
-    plt.xlabel('Predicted Risk Score')
-    plt.ylabel('Frequency')
-    plt.title('Distribution of Risk Scores')
-    plt.grid(True, alpha=0.3)
-    
-    # 2. Log-scale Risk Distribution
-    plt.subplot(3, 3, 2)
-    plt.hist(np.log10(results['predicted_risk'] + 1e-10), bins=50, alpha=0.7, color='lightcoral', edgecolor='black')
-    plt.xlabel('Log10(Predicted Risk Score)')
-    plt.ylabel('Frequency')
-    plt.title('Log-Scale Risk Distribution')
-    plt.grid(True, alpha=0.3)
-    
-    # 3. Risk vs Collision Count Scatter
-    plt.subplot(3, 3, 3)
-    plt.scatter(results['collision_count'], results['predicted_risk'], alpha=0.6, s=30)
-    plt.xlabel('Actual Collision Count')
-    plt.ylabel('Predicted Risk Score')
-    plt.title('Risk Score vs Actual Collisions')
-    plt.grid(True, alpha=0.3)
-    
-    # 4. Risk Categories Bar Chart
-    plt.subplot(3, 3, 4)
-    risk_counts = results['risk_category'].value_counts()
-    colors = ['green', 'yellow', 'orange', 'red', 'darkred']
-    risk_counts.plot(kind='bar', color=colors[:len(risk_counts)], alpha=0.7)
-    plt.xlabel('Risk Category')
-    plt.ylabel('Number of Sites')
-    plt.title('Sites by Risk Category')
-    plt.xticks(rotation=45)
-    plt.grid(True, alpha=0.3)
-    
-    # 5. Percentile vs Risk Score
-    plt.subplot(3, 3, 5)
-    plt.scatter(results['risk_percentile'], results['predicted_risk'], alpha=0.6, s=30, c=results['collision_count'], cmap='Reds')
-    plt.xlabel('Risk Percentile')
-    plt.ylabel('Predicted Risk Score')
-    plt.title('Risk Percentile vs Risk Score')
-    plt.colorbar(label='Collision Count')
-    plt.grid(True, alpha=0.3)
-    
-    # 6. Geographic Distribution (if coordinates available)
-    plt.subplot(3, 3, 6)
-    if 'longitude' in results.columns and 'latitude' in results.columns:
-        scatter = plt.scatter(results['longitude'], results['latitude'], 
-                            c=results['predicted_risk'], cmap='Reds', 
-                            s=50, alpha=0.7)
-        plt.xlabel('Longitude')
-        plt.ylabel('Latitude')
-        plt.title('Geographic Distribution of Risk')
-        plt.colorbar(scatter, label='Risk Score')
-    else:
-        plt.text(0.5, 0.5, 'Geographic coordinates\nnot available', 
-                ha='center', va='center', transform=plt.gca().transAxes)
-        plt.title('Geographic Distribution of Risk')
-    
-    # 7. Top 10 Highest Risk Sites
-    plt.subplot(3, 3, 7)
-    top_10 = results.nlargest(10, 'predicted_risk')
-    plt.barh(range(len(top_10)), top_10['predicted_risk'])
-    plt.ylabel('Site Rank')
-    plt.xlabel('Risk Score')
-    plt.title('Top 10 Highest Risk Sites')
-    plt.yticks(range(len(top_10)), [f"Site {i+1}" for i in range(len(top_10))])
-    plt.grid(True, alpha=0.3)
-    
-    # 8. Risk vs Traffic Volume
-    plt.subplot(3, 3, 8)
-    if 'avg_daily_vol' in results.columns:
-        plt.scatter(results['avg_daily_vol'], results['predicted_risk'], alpha=0.6, s=30)
-        plt.xlabel('Average Daily Volume')
-        plt.ylabel('Predicted Risk Score')
-        plt.title('Risk vs Traffic Volume')
-        plt.grid(True, alpha=0.3)
-    else:
-        plt.text(0.5, 0.5, 'Traffic volume data\nnot available', 
-                ha='center', va='center', transform=plt.gca().transAxes)
-        plt.title('Risk vs Traffic Volume')
-    
-    # 9. Risk Percentile Distribution
-    plt.subplot(3, 3, 9)
-    plt.hist(results['risk_percentile'], bins=20, alpha=0.7, color='purple', edgecolor='black')
-    plt.xlabel('Risk Percentile')
-    plt.ylabel('Frequency')
-    plt.title('Risk Percentile Distribution')
-    plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    # Save the comprehensive visualization
-    viz_filename = 'risk_analysis_dashboard.png'
-    plt.savefig(viz_filename, dpi=300, bbox_inches='tight')
-    print(f"Comprehensive visualization saved as {viz_filename}")
-    
-    # Create a separate high-resolution map if coordinates are available
-    if 'longitude' in results.columns and 'latitude' in results.columns:
-        plt.figure(figsize=(12, 10))
-        
-        # Create risk-based color mapping
-        norm = plt.Normalize(vmin=results['predicted_risk'].min(), vmax=results['predicted_risk'].max())
-        scatter = plt.scatter(results['longitude'], results['latitude'], 
-                            c=results['predicted_risk'], cmap='Reds', 
-                            s=80, alpha=0.7, norm=norm, edgecolors='black', linewidth=0.5)
-        
-        plt.xlabel('Longitude', fontsize=12)
-        plt.ylabel('Latitude', fontsize=12)
-        plt.title('SpeedShield Risk Analysis - Geographic Distribution', fontsize=14, fontweight='bold')
-        
-        # Add colorbar
-        cbar = plt.colorbar(scatter, label='Predicted Risk Score')
-        cbar.ax.tick_params(labelsize=10)
-        
-        # Add grid
-        plt.grid(True, alpha=0.3)
-        
-        # Highlight top 5% highest risk sites
-        top_5_percent = results[results['risk_percentile'] >= 95]
-        if not top_5_percent.empty:
-            plt.scatter(top_5_percent['longitude'], top_5_percent['latitude'], 
-                       s=150, facecolors='none', edgecolors='blue', linewidth=2, 
-                       label=f'Top 5% Risk Sites (n={len(top_5_percent)})')
-            plt.legend()
-        
-        plt.tight_layout()
-        map_filename = 'risk_geographic_map.png'
-        plt.savefig(map_filename, dpi=300, bbox_inches='tight')
-        print(f"Geographic risk map saved as {map_filename}")
-    
-    # Create summary statistics
-    print("\n" + "="*50)
-    print("RISK ANALYSIS SUMMARY")
-    print("="*50)
-    print(f"Total sites analyzed: {len(results):,}")
-    print(f"Mean risk score: {results['predicted_risk'].mean():.6f}")
-    print(f"Median risk score: {results['predicted_risk'].median():.6f}")
-    print(f"Standard deviation: {results['predicted_risk'].std():.6f}")
-    print(f"Min risk score: {results['predicted_risk'].min():.6f}")
-    print(f"Max risk score: {results['predicted_risk'].max():.6f}")
-    
-    print(f"\nRisk Category Distribution:")
-    for category in ['Critical', 'Very High', 'High', 'Medium', 'Low']:
-        count = (results['risk_category'] == category).sum()
-        percentage = count / len(results) * 100
-        print(f"  {category}: {count:,} sites ({percentage:.1f}%)")
-    
-    print(f"\nTop 10 Percentile Thresholds:")
-    percentiles = [90, 95, 97.5, 99, 99.5, 99.9]
-    for p in percentiles:
-        threshold = np.percentile(results['predicted_risk'], p)
-        count = (results['predicted_risk'] >= threshold).sum()
-        print(f"  {p}th percentile: {threshold:.6f} ({count:,} sites)")
-    
-    # Don't show plots interactively in batch processing
-    # plt.show()
-    
-    return results
+    return output_file
 
 def main():
     """
     Main function to process traffic and collision data for speed-camera siting.
-    Automatically loads CSV files from the current directory.
+    Automatically loads CSV files from the current directory and outputs training data.
     """
-    print("SpeedShield Data Processing")
-    print("=" * 30)
+    print("SpeedShield Data Processing Pipeline")
+    print("=" * 35)
     
     try:
         # Load data automatically from current directory
@@ -644,31 +409,13 @@ def main():
         print("\nProcessing data...")
         features = preprocess(svc, coll, schools, tmc)
         
-        print("Fitting Poisson regression model...")
-        model, results = fit_poisson(features)
+        # Save training data for modeling pipeline
+        output_file = save_training_data(features)
         
-        # Add percentiles and create visualizations
-        results = add_percentiles_and_visualize(results)
-        
-        # Save results with coordinates as first columns
-        output_file = "sited_scores.csv"
-        
-        # Ensure coordinates are first columns in output, followed by percentiles
-        output_cols = ['longitude', 'latitude']
-        priority_cols = ['latest_count_id', 'predicted_risk', 'risk_percentile', 'risk_category', 'collision_count']
-        remaining_cols = [col for col in results.columns if col not in output_cols + priority_cols]
-        final_output_cols = output_cols + priority_cols + remaining_cols
-        
-        # Reorder columns and save
-        results_ordered = results[final_output_cols]
-        results_ordered.sort_values('predicted_risk', ascending=False).to_csv(output_file, index=False)
-        
-        print(f"\nResults saved to {output_file}")
-        print(f"Processed {len(results)} sites")
-        print(f"Output columns: {final_output_cols[:8]}...")  # Show first 8 columns
-        print(f"Top 5 highest risk sites:")
-        display_cols = ['longitude', 'latitude', 'latest_count_id', 'predicted_risk', 'risk_percentile', 'collision_count']
-        print(results.nlargest(5, 'predicted_risk')[display_cols].to_string(index=False))
+        print(f"\nData processing completed successfully!")
+        print(f"Training data ready for modeling in: {output_file}")
+        print(f"\nTo run the model, execute:")
+        print(f"python model.py")
         
     except Exception as e:
         print(f"Error: {e}")
