@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
@@ -89,6 +88,12 @@ def fit_model(features):
     
     if 'near_school' in features:
         X['near_school'] = features['near_school'].astype(int)
+    
+    if 'in_school_zone' in features:
+        X['in_school_zone'] = features['in_school_zone'].astype(int)
+        # create a combined school risk factor that considers both proximity and designation
+        school_risk = features['near_school'].astype(int) + features['in_school_zone'].astype(int)
+        X['school_risk_factor'] = np.minimum(school_risk, 2)  # cap at 2 for sites that are both near schools AND in zones
     
     if 'dist_to_nearest_camera' in features and 'cameras_within_500m' in features:
         X['enforcement_gap'] = features['dist_to_nearest_camera'] / (1 + features['cameras_within_500m'])
