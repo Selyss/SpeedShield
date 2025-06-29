@@ -11,8 +11,10 @@ import {
 import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import L from "leaflet";
-import { Circle, LayersControl } from "react-leaflet";
+import { Circle, LayerGroup, LayersControl } from "react-leaflet";
 import { useMap } from "react-leaflet";
+import type { Marker } from "~/server/db/schema"; // Adjust the import path based on your project structure
+ // Adjust the import path based on your project structure
 
 import type { LatLngTuple } from "leaflet";
 const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
@@ -23,14 +25,6 @@ interface DialogData
   title?: string;
 }
 
-interface Marker {
-  id: number;
-  name: string | null;
-  latitude: number;
-  longitude: number;
-  createdAt: Date;
-  updatedAt: Date | null;
-}
 
 const iconSize = 32; // Size of the icon in pixels
 
@@ -40,7 +34,7 @@ const markerIcon = L.divIcon({
     className: "marker-icon", // Custom class for styling
 });
 
-function ResetMapView({ center, zoom, trigger }: { center: [number, number]; zoom: number; trigger: number }) {
+function ResetMapView({ center, zoom, trigger }: { center: LatLngTuple; zoom: number; trigger: number }) {
   const map = useMap();
   useEffect(() => {
     map.setView(center, zoom);
@@ -88,28 +82,13 @@ const MapContent = dynamic(
           >
             <ResetMapView center={center} zoom={zoom} trigger={resetTrigger} />
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             />
             <LayersControl position="topright">
               <LayersControl.Overlay name="Schools">
-                <Circle
-                  center={center} // example school
-                  radius={200}
-                  pathOptions={{ color: "#878787", fillColor: "#ABABAB", fillOpacity: 1 }}
-                />
-              </LayersControl.Overlay>
-              <LayersControl.Overlay checked name="Existing Cameras">
-                {/* PLACEHOLDER */}
-                <Circle
-                  center={center}
-                  radius={300}
-                  pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.1 }}
-                />
-              </LayersControl.Overlay>
-              <LayersControl.Overlay checked name="Markers">
-                <>
-                  {markers.map((marker) => (
+                <LayerGroup>
+                  {markers.map((marker: Marker) => (
                     <Marker
                       key={marker.id}
                       position={[marker.latitude, marker.longitude]}
@@ -122,13 +101,22 @@ const MapContent = dynamic(
                             name: marker.name,
                             latitude: marker.latitude,
                             longitude: marker.longitude,
-                            createdAt: marker.createdAt,
-                            updatedAt: marker.updatedAt,
                           }),
                       }}
                     ></Marker>
                   ))}
-                </>
+                </LayerGroup>
+              </LayersControl.Overlay>
+              <LayersControl.Overlay checked name="Existing Cameras">
+                {/* PLACEHOLDER */}
+                <Circle
+                  center={center}
+                  radius={300}
+                  pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.1 }}
+                />
+              </LayersControl.Overlay>
+              <LayersControl.Overlay checked name="Markers">
+                <Marker position={center} icon={markerIcon}></Marker>
               </LayersControl.Overlay>
             </LayersControl>
             <MapClickHandler onMapClick={dialogHandler} />{" "}

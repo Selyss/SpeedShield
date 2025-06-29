@@ -3,6 +3,7 @@
 
 import { sql } from "drizzle-orm";
 import { index, pgTableCreator } from "drizzle-orm/pg-core";
+import type { Infer } from "next/dist/compiled/superstruct";
 
 /**
  * This is an example of how to use the multi-project schema feature of Drizzle ORM. Use the same
@@ -32,10 +33,8 @@ export const markers = createTable(
     name: d.varchar({ length: 256 }),
     latitude: d.doublePrecision().notNull(),
     longitude: d.doublePrecision().notNull(),
-    createdAt: d
-      .timestamp({ withTimezone: true })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
-    updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+    markerType: d.varchar({ length: 64 }).notNull().default("default"),
   })
 )
+
+export type Marker = typeof markers.$inferSelect;
