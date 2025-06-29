@@ -87,7 +87,7 @@ const MapContent = dynamic(
                   pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 0.1 }}
                 />
               </LayersControl.Overlay>
-              <LayersControl.Overlay name="Existing Cameras">
+              <LayersControl.Overlay checked name="Existing Cameras">
                 {/* PLACEHOLDER */}
                 <Circle
                   center={center}
