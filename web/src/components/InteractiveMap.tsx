@@ -12,6 +12,11 @@ import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import L from "leaflet";
 import { Circle, LayersControl } from "react-leaflet";
+import { useMap } from "react-leaflet";
+
+import type { LatLngTuple } from "leaflet";
+const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
+const zoom = 13; // Default zoom level
 
 interface DialogData
   extends Record<string, string | number | boolean | Date | null | undefined> {
@@ -27,11 +32,21 @@ interface Marker {
   updatedAt: Date | null;
 }
 
+const iconSize = 32; // Size of the icon in pixels
+
 const markerIcon = L.divIcon({
-  html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-icon lucide-map-pin"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`,
-  iconAnchor: [12, 24], // Center the icon at the bottom
-  className: "marker-icon", // Custom class for styling
+    html: `<svg xmlns="http://www.w3.org/2000/svg" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-icon lucide-map-pin"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`,
+    iconAnchor: [iconSize/2, iconSize], // Center the icon at the bottom
+    className: "marker-icon", // Custom class for styling
 });
+
+function ResetMapView({ center, zoom, trigger }: { center: [number, number]; zoom: number; trigger: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [trigger, center, zoom, map]);
+  return null;
+}
 
 // Create a separate component for the map content that will be dynamically loaded
 const MapContent = dynamic(
@@ -58,17 +73,20 @@ const MapContent = dynamic(
       return function Map({
         dialogHandler,
         markers,
+        resetTrigger,
       }: {
         dialogHandler: (data: DialogData) => void;
         markers: Marker[];
+          resetTrigger: number;
       }) {
         return (
           <MapContainer
-            center={[43.6532, -79.3832]} // Default to toronto
-            zoom={13}
+            center={center} // Default to toronto
+            zoom={zoom}
             style={{ height: "100%", width: "100%" }}
             className="z-0"
           >
+            <ResetMapView center={center} zoom={zoom} trigger={resetTrigger} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -76,9 +94,17 @@ const MapContent = dynamic(
             <LayersControl position="topright">
               <LayersControl.Overlay name="Schools">
                 <Circle
-                  center={[43.6532, -79.3832]} // example school
-                  radius={500} // 500m radius
-                  pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 0.1 }}
+                  center={center} // example school
+                  radius={200}
+                  pathOptions={{ color: "#878787", fillColor: "#ABABAB", fillOpacity: 1 }}
+                />
+              </LayersControl.Overlay>
+              <LayersControl.Overlay checked name="Existing Cameras">
+                {/* PLACEHOLDER */}
+                <Circle
+                  center={center}
+                  radius={300}
+                  pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.1 }}
                 />
               </LayersControl.Overlay>
               <LayersControl.Overlay checked name="Markers">
@@ -119,6 +145,7 @@ export default function InteractiveMap() {
   const [selectedData, setSelectedData] = useState<DialogData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [resetTrigger, setResetTrigger] = useState(0);
 
   // Fetch markers from the database
   const { data: markers = [], isLoading: markersLoading } =
@@ -168,7 +195,15 @@ export default function InteractiveMap() {
   return (
     <>
       <div className="h-screen w-full">
-        <MapContent dialogHandler={showDialog} markers={markers} />
+        <Button
+          onClick={() => setResetTrigger(t => t + 1)}
+          variant="outline"
+          size="sm"
+          className="absolute bottom-4 right-4 z-10"
+        >
+          Reset View
+        </Button>
+        <MapContent dialogHandler={showDialog} markers={markers} resetTrigger={resetTrigger} />
       </div>{" "}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md">
