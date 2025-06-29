@@ -11,7 +11,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import L from "leaflet";
-import { Circle, LayersControl } from "react-leaflet";
+import { Circle, LayerGroup, LayersControl } from "react-leaflet";
 import { useMap } from "react-leaflet";
 import type { Marker } from "~/server/db/schema"; // Adjust the import path based on your project structure
  // Adjust the import path based on your project structure
@@ -87,22 +87,7 @@ const MapContent = dynamic(
             />
             <LayersControl position="topright">
               <LayersControl.Overlay name="Schools">
-                <Circle
-                  center={center} // example school
-                  radius={200}
-                  pathOptions={{ color: "#878787", fillColor: "#ABABAB", fillOpacity: 1 }}
-                />
-              </LayersControl.Overlay>
-              <LayersControl.Overlay checked name="Existing Cameras">
-                {/* PLACEHOLDER */}
-                <Circle
-                  center={center}
-                  radius={300}
-                  pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.1 }}
-                />
-              </LayersControl.Overlay>
-              <LayersControl.Overlay checked name="Markers">
-                <>
+                <LayerGroup>
                   {markers.map((marker: Marker) => (
                     <Marker
                       key={marker.id}
@@ -120,7 +105,18 @@ const MapContent = dynamic(
                       }}
                     ></Marker>
                   ))}
-                </>
+                </LayerGroup>
+              </LayersControl.Overlay>
+              <LayersControl.Overlay checked name="Existing Cameras">
+                {/* PLACEHOLDER */}
+                <Circle
+                  center={center}
+                  radius={300}
+                  pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.1 }}
+                />
+              </LayersControl.Overlay>
+              <LayersControl.Overlay checked name="Markers">
+                <Marker position={center} icon={markerIcon}></Marker>
               </LayersControl.Overlay>
             </LayersControl>
             <MapClickHandler onMapClick={dialogHandler} />{" "}
