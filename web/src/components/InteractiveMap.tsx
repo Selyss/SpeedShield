@@ -87,6 +87,14 @@ const MapContent = dynamic(
                   pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 0.1 }}
                 />
               </LayersControl.Overlay>
+              <LayersControl.Overlay name="Existing Cameras">
+                {/* PLACEHOLDER */}
+                <Circle
+                  center={center}
+                  radius={300}
+                  pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.1 }}
+                />
+              </LayersControl.Overlay>
               <LayersControl.Overlay checked name="Markers">
                 <>
                   {markers.map((marker) => (
