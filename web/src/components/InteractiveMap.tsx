@@ -10,13 +10,19 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
-import L from "leaflet";
+import L, { marker } from "leaflet";
 import { Circle, LayerGroup, LayersControl } from "react-leaflet";
 import { useMap } from "react-leaflet";
 import type { Marker } from "~/server/db/schema"; // Adjust the import path based on your project structure
- // Adjust the import path based on your project structure
+// Adjust the import path based on your project structure
 
 import type { LatLngTuple } from "leaflet";
+import {
+  getMarkerType,
+  getMarkerTypeOptions,
+  MARKER_TYPES,
+  type MarkerTypeId,
+} from "~/lib/markerType";
 const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
 const zoom = 13; // Default zoom level
 
@@ -25,16 +31,17 @@ interface DialogData
   title?: string;
 }
 
-
 const iconSize = 32; // Size of the icon in pixels
 
-const markerIcon = L.divIcon({
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin-icon lucide-map-pin"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconAnchor: [iconSize/2, iconSize], // Center the icon at the bottom
-    className: "marker-icon", // Custom class for styling
-});
-
-function ResetMapView({ center, zoom, trigger }: { center: LatLngTuple; zoom: number; trigger: number }) {
+function ResetMapView({
+  center,
+  zoom,
+  trigger,
+}: {
+  center: LatLngTuple;
+  zoom: number;
+  trigger: number;
+}) {
   const map = useMap();
   useEffect(() => {
     map.setView(center, zoom);
@@ -64,14 +71,56 @@ const MapContent = dynamic(
         return null;
       }
 
+      function renderMarkerCategory(
+        markerOption: {
+          value: MarkerTypeId;
+          label: string;
+        },
+        dialogHandler: (data: DialogData) => void,
+      ) {
+        const markers = api.markers.getByType.useQuery({
+          markerType: markerOption.value,
+        });
+        if (markers.isLoading) {
+          console.log(`Loading markers for type: ${markerOption.label}`);
+          return null; // Handle loading state if needed
+        }
+        if (markers.isError) {
+          console.error(`Error loading markers for type: ${markerOption.label}`, markers.error);
+          return <div>Error loading markers</div>;
+        }
+        if (!markers.data || markers.data.length === 0) {
+          console.log(`No markers found for type: ${markerOption.label}`);
+          return null; // No markers to display
+        }
+        console.log(`Loaded ${markers.data.length} markers for type: ${markerOption.label}`, markers.data);
+
+        return markers.data.map((marker: Marker) => (
+          <Marker
+            key={marker.id}
+            position={[marker.latitude, marker.longitude]}
+            icon={getMarkerType(markerOption.value).icon}
+            eventHandlers={{
+              click: () =>
+                dialogHandler({
+                  title: marker.name ?? `Marker ${marker.id}`,
+                  id: marker.id,
+                  name: marker.name,
+                  latitude: marker.latitude,
+                  longitude: marker.longitude,
+                  markerType: marker.markerType,
+                }),
+            }}
+          ></Marker>
+        ));
+      }
+
       return function Map({
         dialogHandler,
-        markers,
         resetTrigger,
       }: {
         dialogHandler: (data: DialogData) => void;
-        markers: Marker[];
-          resetTrigger: number;
+        resetTrigger: number;
       }) {
         return (
           <MapContainer
@@ -86,37 +135,28 @@ const MapContent = dynamic(
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             />
             <LayersControl position="topright">
-              <LayersControl.Overlay name="Schools">
-                <LayerGroup>
-                  {markers.map((marker: Marker) => (
-                    <Marker
-                      key={marker.id}
-                      position={[marker.latitude, marker.longitude]}
-                      icon={markerIcon}
-                      eventHandlers={{
-                        click: () =>
-                          dialogHandler({
-                            title: marker.name ?? `Marker ${marker.id}`,
-                            id: marker.id,
-                            name: marker.name,
-                            latitude: marker.latitude,
-                            longitude: marker.longitude,
-                          }),
-                      }}
-                    ></Marker>
-                  ))}
-                </LayerGroup>
-              </LayersControl.Overlay>
+              {getMarkerTypeOptions().map((MarkerOption) => (
+                <LayersControl.Overlay
+                  name={MarkerOption.label}
+                  key={MarkerOption.value}
+                >
+                  <LayerGroup>
+                    {renderMarkerCategory(MarkerOption, dialogHandler)}
+                  </LayerGroup>
+                </LayersControl.Overlay>
+              ))}
+
               <LayersControl.Overlay checked name="Existing Cameras">
                 {/* PLACEHOLDER */}
                 <Circle
                   center={center}
                   radius={300}
-                  pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.1 }}
+                  pathOptions={{
+                    color: "red",
+                    fillColor: "red",
+                    fillOpacity: 0.1,
+                  }}
                 />
-              </LayersControl.Overlay>
-              <LayersControl.Overlay checked name="Markers">
-                <Marker position={center} icon={markerIcon}></Marker>
               </LayersControl.Overlay>
             </LayersControl>
             <MapClickHandler onMapClick={dialogHandler} />{" "}
@@ -134,10 +174,6 @@ export default function InteractiveMap() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [resetTrigger, setResetTrigger] = useState(0);
-
-  // Fetch markers from the database
-  const { data: markers = [], isLoading: markersLoading } =
-    api.markers.getAll.useQuery();
 
   useEffect(() => {
     setIsClient(true);
@@ -172,26 +208,19 @@ export default function InteractiveMap() {
     }
     return String(value);
   };
-  if (!isClient || markersLoading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-gray-100">
-        <div className="text-lg">Loading map...</div>
-      </div>
-    );
-  }
 
   return (
     <>
       <div className="h-screen w-full">
         <Button
-          onClick={() => setResetTrigger(t => t + 1)}
+          onClick={() => setResetTrigger((t) => t + 1)}
           variant="outline"
           size="sm"
-          className="absolute bottom-4 right-4 z-10"
+          className="absolute right-4 bottom-4 z-10"
         >
           Reset View
         </Button>
-        <MapContent dialogHandler={showDialog} markers={markers} resetTrigger={resetTrigger} />
+        <MapContent dialogHandler={showDialog} resetTrigger={resetTrigger} />
       </div>{" "}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md">
