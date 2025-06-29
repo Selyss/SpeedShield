@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import L from "leaflet";
 import { Circle, LayersControl } from "react-leaflet";
+import { useMap } from "react-leaflet";
 
 import type { LatLngTuple } from "leaflet";
 const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
@@ -39,6 +40,14 @@ const markerIcon = L.divIcon({
     className: "marker-icon", // Custom class for styling
 });
 
+function ResetMapView({ center, zoom, trigger }: { center: [number, number]; zoom: number; trigger: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [trigger, center, zoom, map]);
+  return null;
+}
+
 // Create a separate component for the map content that will be dynamically loaded
 const MapContent = dynamic(
   () =>
@@ -64,9 +73,11 @@ const MapContent = dynamic(
       return function Map({
         dialogHandler,
         markers,
+        resetTrigger,
       }: {
         dialogHandler: (data: DialogData) => void;
         markers: Marker[];
+          resetTrigger: number;
       }) {
         return (
           <MapContainer
@@ -75,6 +86,7 @@ const MapContent = dynamic(
             style={{ height: "100%", width: "100%" }}
             className="z-0"
           >
+            <ResetMapView center={center} zoom={zoom} trigger={resetTrigger} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -133,6 +145,7 @@ export default function InteractiveMap() {
   const [selectedData, setSelectedData] = useState<DialogData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [resetTrigger, setResetTrigger] = useState(0);
 
   // Fetch markers from the database
   const { data: markers = [], isLoading: markersLoading } =
@@ -182,7 +195,13 @@ export default function InteractiveMap() {
   return (
     <>
       <div className="h-screen w-full">
-        <MapContent dialogHandler={showDialog} markers={markers} />
+        <Button
+          className="absolute bottom-4 right-4 z-10 border rounded px-3 py-1 shadow"
+          onClick={() => setResetTrigger(t => t + 1)}
+        >
+          Reset View
+        </Button>
+        <MapContent dialogHandler={showDialog} markers={markers} resetTrigger={resetTrigger} />
       </div>{" "}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md">
