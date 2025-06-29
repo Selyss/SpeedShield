@@ -196,8 +196,10 @@ export default function InteractiveMap() {
     <>
       <div className="h-screen w-full">
         <Button
-          className="absolute bottom-4 right-4 z-10 border rounded px-3 py-1 shadow"
           onClick={() => setResetTrigger(t => t + 1)}
+          variant="outline"
+          size="sm"
+          className="absolute bottom-4 right-4 z-10"
         >
           Reset View
         </Button>
