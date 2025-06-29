@@ -83,8 +83,8 @@ const MapContent = dynamic(
               <LayersControl.Overlay name="Schools">
                 <Circle
                   center={center} // example school
-                  radius={500} // 500m radius
-                  pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 0.1 }}
+                  radius={200}
+                  pathOptions={{ color: "#878787", fillColor: "#ABABAB", fillOpacity: 1 }}
                 />
               </LayersControl.Overlay>
               <LayersControl.Overlay checked name="Existing Cameras">
