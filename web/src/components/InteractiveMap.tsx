@@ -13,6 +13,10 @@ import { api } from "~/trpc/react";
 import L from "leaflet";
 import { Circle, LayersControl } from "react-leaflet";
 
+import type { LatLngTuple } from "leaflet";
+const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
+const zoom = 13; // Default zoom level
+
 interface DialogData
   extends Record<string, string | number | boolean | Date | null | undefined> {
   title?: string;
@@ -66,8 +70,8 @@ const MapContent = dynamic(
       }) {
         return (
           <MapContainer
-            center={[43.6532, -79.3832]} // Default to toronto
-            zoom={13}
+            center={center} // Default to toronto
+            zoom={zoom}
             style={{ height: "100%", width: "100%" }}
             className="z-0"
           >
@@ -78,7 +82,7 @@ const MapContent = dynamic(
             <LayersControl position="topright">
               <LayersControl.Overlay name="Schools">
                 <Circle
-                  center={[43.6532, -79.3832]} // example school
+                  center={center} // example school
                   radius={500} // 500m radius
                   pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 0.1 }}
                 />
