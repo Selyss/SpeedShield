@@ -4,6 +4,7 @@ from shapely.geometry import Point
 import numpy as np
 import os
 import glob
+import json
 
 def load_data():
     """
@@ -90,7 +91,39 @@ def load_data():
         print("No school data file found. Creating empty GeoDataFrame.")
         schools = gpd.GeoDataFrame()
     
-    return svc, coll, schools, tmc
+    # Load school zone data from export.geojson
+    school_zones = None
+    if os.path.exists("export.geojson"):
+        print("Loading school zone data from: export.geojson")
+        try:
+            # Load the GeoJSON and filter for community safety zones (school zones)
+            geojson_data = gpd.read_file("export.geojson")
+            school_zones = geojson_data[geojson_data.get('community_safety_zone', '') == 'yes'].copy()
+            print(f"Found {len(school_zones)} school zone features")
+        except Exception as e:
+            print(f"Warning: Could not load school zone data from export.geojson: {e}")
+            school_zones = gpd.GeoDataFrame()
+    else:
+        print("No export.geojson file found for school zone data.")
+        school_zones = gpd.GeoDataFrame()
+    
+    # Load retirement home data
+    retirement_homes = None
+    retirement_files = ["RetirementHomes.csv"] + glob.glob("*retirement*.*") + glob.glob("*Retirement*.*")
+    if retirement_files and os.path.exists(retirement_files[0]):
+        retirement_file = retirement_files[0]
+        print(f"Loading retirement home data from: {retirement_file}")
+        try:
+            retirement_homes = pd.read_csv(retirement_file)
+            print(f"Found {len(retirement_homes)} retirement home facilities")
+        except Exception as e:
+            print(f"Warning: Could not load retirement home data from {retirement_file}: {e}")
+            retirement_homes = pd.DataFrame()
+    else:
+        print("No retirement home data file found.")
+        retirement_homes = pd.DataFrame()
+    
+    return svc, coll, schools, tmc, school_zones, retirement_homes
 
 def to_gdf(df, lon_col=None, lat_col=None, crs="EPSG:4326"):
     """
@@ -204,7 +237,7 @@ def to_gdf(df, lon_col=None, lat_col=None, crs="EPSG:4326"):
     gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df[lon_col], df[lat_col]), crs=crs)
     return gdf
 
-def preprocess(svc, coll, schools, tmc, buffer_m=100, school_buf_m=200):
+def preprocess(svc, coll, schools, tmc, school_zones=None, retirement_homes=None, buffer_m=100, school_buf_m=200, retirement_buf_m=300):
     print("Converting data to GeoDataFrames...")
     
     # Convert to GeoDataFrames with automatic column detection
@@ -285,13 +318,79 @@ def preprocess(svc, coll, schools, tmc, buffer_m=100, school_buf_m=200):
     svc_gdf['length_km'] = svc_gdf.get('length_km', 0.1)
     svc_gdf['veh_km'] = svc_gdf[vol_col] * 365 * svc_gdf['length_km']
 
-    # School proximity flag
+    # School proximity flag - check both school locations and school zones
+    svc_gdf['near_school'] = False
+    svc_gdf['in_school_zone'] = False
+    
+    # Check proximity to schools (if available)
     if not schools_gdf.empty:
         schools_buf = schools_gdf.buffer(school_buf_m)
         schools_union = gpd.GeoSeries(schools_buf.unary_union)
         svc_gdf['near_school'] = svc_gdf.geometry.centroid.within(schools_union)
-    else:
-        svc_gdf['near_school'] = False
+        print(f"Found {svc_gdf['near_school'].sum()} sites near schools")
+    
+    # Check if sites are within designated school zones (community safety zones)
+    if school_zones is not None and not school_zones.empty:
+        try:
+            # Ensure school zones are in the same CRS
+            school_zones_gdf = school_zones.to_crs(epsg=3857)
+            
+            # Since school zones are LineStrings (roads), we need to buffer them to create zones
+            school_zone_buffer_m = 50  # 50 meter buffer around school zone roads
+            school_zones_buffered = school_zones_gdf.geometry.buffer(school_zone_buffer_m)
+            
+            # Create a union of all buffered school zones
+            school_zones_union = school_zones_buffered.unary_union
+            
+            # Check if any site intersects with buffered school zones
+            svc_gdf['in_school_zone'] = svc_gdf.geometry.intersects(school_zones_union)
+            
+            print(f"Found {svc_gdf['in_school_zone'].sum()} sites within designated school zones (with {school_zone_buffer_m}m buffer)")
+        except Exception as e:
+            print(f"Warning: Could not process school zone data: {e}")
+            svc_gdf['in_school_zone'] = False
+    
+    # Combine school proximity indicators - a site is flagged if it's either near a school OR in a school zone
+    svc_gdf['near_school'] = svc_gdf['near_school'] | svc_gdf['in_school_zone']
+    print(f"Total sites flagged for school proximity: {svc_gdf['near_school'].sum()}")
+
+    # retirement home proximity flag
+    svc_gdf['near_retirement_home'] = False
+    
+    # check proximity to retirement homes (if available)
+    if retirement_homes is not None and not retirement_homes.empty:
+        try:
+            # convert retirement homes to GeoDataFrame
+            if 'geometry' in retirement_homes.columns:
+                # parse geometry if it's in json format
+                geometries = []
+                for _, row in retirement_homes.iterrows():
+                    try:
+                        geom_data = json.loads(row['geometry'])
+                        coords = geom_data['coordinates'][0]  # first point in MultiPoint
+                        geometries.append(Point(coords[0], coords[1]))  # [lon, lat]
+                    except:
+                        geometries.append(None)
+                
+                retirement_homes_gdf = gpd.GeoDataFrame(retirement_homes, geometry=geometries, crs="EPSG:4326")
+                retirement_homes_gdf = retirement_homes_gdf.dropna(subset=['geometry'])
+            else:
+                retirement_homes_gdf = to_gdf(retirement_homes)
+            
+            # ensure same crs
+            retirement_homes_gdf = retirement_homes_gdf.to_crs(epsg=3857)
+            
+            # create buffer around retirement homes
+            retirement_buf = retirement_homes_gdf.buffer(retirement_buf_m)
+            retirement_union = retirement_buf.unary_union
+            
+            # check proximity
+            svc_gdf['near_retirement_home'] = svc_gdf.geometry.centroid.within(retirement_union)
+            
+            print(f"Found {svc_gdf['near_retirement_home'].sum()} sites near retirement homes (with {retirement_buf_m}m buffer)")
+        except Exception as e:
+            print(f"Warning: Could not process retirement home data: {e}")
+            svc_gdf['near_retirement_home'] = False
 
     # Merge TMC totals by spatial join within 50m
     tmc_gdf['tmc_geom_buff'] = tmc_gdf.geometry.buffer(50)
@@ -343,7 +442,7 @@ def preprocess(svc, coll, schools, tmc, buffer_m=100, school_buf_m=200):
     # Prepare final DataFrame with flexible column selection
     # Start with coordinates as first columns
     coordinate_cols = ['longitude', 'latitude']
-    required_cols = ['latest_count_id', 'collision_count', 'veh_km', 'near_school']
+    required_cols = ['latest_count_id', 'collision_count', 'veh_km', 'near_school', 'in_school_zone', 'near_retirement_home']
     
     # Add available traffic columns
     traffic_cols = ['avg_daily_vol', 'avg_speed', 'avg_85th_percentile_speed', 'avg_95th_percentile_speed', 'avg_heavy_pct']
@@ -371,7 +470,7 @@ def save_training_data(features, output_file="training_data.csv"):
     """
     # Ensure coordinates are first columns in output
     output_cols = ['longitude', 'latitude']
-    required_cols = ['latest_count_id', 'collision_count', 'veh_km', 'near_school']
+    required_cols = ['latest_count_id', 'collision_count', 'veh_km', 'near_school', 'in_school_zone', 'near_retirement_home']
     
     # Add available traffic/risk columns
     traffic_cols = ['avg_daily_vol', 'avg_speed', 'avg_85th_percentile_speed', 
@@ -404,10 +503,10 @@ def main():
     
     try:
         # Load data automatically from current directory
-        svc, coll, schools, tmc = load_data()
+        svc, coll, schools, tmc, school_zones, retirement_homes = load_data()
         
         print("\nProcessing data...")
-        features = preprocess(svc, coll, schools, tmc)
+        features = preprocess(svc, coll, schools, tmc, school_zones, retirement_homes)
         
         # Save training data for modeling pipeline
         output_file = save_training_data(features)
