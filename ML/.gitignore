@@ -168,6 +168,7 @@ cython_debug/
 *.hdf5
 *.pkl
 *.pickle
+*.png
 
 # Model files
 *.model
