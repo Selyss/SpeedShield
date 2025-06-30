@@ -2,7 +2,7 @@
 // https://orm.drizzle.team/docs/sql-schema-declaration
 
 import { sql } from "drizzle-orm";
-import { index, pgTableCreator } from "drizzle-orm/pg-core";
+import { index, pgTableCreator, primaryKey } from "drizzle-orm/pg-core";
 import type { Infer } from "next/dist/compiled/superstruct";
 
 /**
@@ -37,4 +37,45 @@ export const markers = createTable(
   })
 )
 
+export const scores = createTable(
+  "scores",
+  (d) => ({
+    longitude: d.doublePrecision().notNull(),
+    latitude: d.doublePrecision().notNull(),
+    latest_count_id: d.bigint({mode:"bigint"}),
+    predicted_risk: d.doublePrecision(),
+    risk_percentile: d.doublePrecision(),
+    risk_category: d.text(),
+    collision_count: d.bigint({mode:"number"}),
+    speed_risk: d.doublePrecision(),
+    volume_risk: d.doublePrecision(),
+    collision_history: d.doublePrecision(),
+    heavy_share: d.doublePrecision(),
+    near_school: d.boolean(),
+    volume_risk_percentile: d.doublePrecision(),
+    collision_history_percentile: d.doublePrecision(),
+    volume_risk_category: d.text(),
+    collision_history_category: d.text(),
+    veh_km: d.doublePrecision(),
+    in_school_zone: d.boolean(),
+    near_retirement_home: d.boolean(),
+    avg_daily_vol: d.doublePrecision(),
+    avg_speed: d.doublePrecision(),
+    avg_85th_percentile_speed: d.doublePrecision(),
+    avg_95th_percentile_speed: d.doublePrecision(),
+    avg_heavy_pct: d.doublePrecision(),
+    has_camera: d.boolean(),
+    school_risk_factor: d.integer(),
+    vulnerable_population_risk: d.real(),
+    camera_score: d.doublePrecision(),
+    final_score: d.doublePrecision(),
+  }),
+  (t) => [
+    // Composite primary key on longitude, latitude
+    primaryKey({ columns: [t.longitude, t.latitude] })
+  ]
+);
+
 export type Marker = typeof markers.$inferSelect;
+export type Score = typeof scores.$inferSelect;
+
