@@ -234,7 +234,7 @@ const MapContent = dynamic(
                 />
               </LayersControl.Overlay>
             </LayersControl>
-            <MapClickHandler onMapClick={dialogHandler} />
+            {/* <MapClickHandler onMapClick={dialogHandler} /> */}
             <MapBoundsHandler onBoundsChange={onBoundsChange} />
           </MapContainer>
         );

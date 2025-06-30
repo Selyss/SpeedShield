@@ -55,7 +55,11 @@ export const scoresRouter = createTRPCRouter({
 
       const [data, totalCountResult] = await Promise.all([
         ctx.db
-          .select()
+          .select({
+            latitude: scores.latitude,
+            longitude: scores.longitude,
+            risk_category: scores.risk_category,
+          })
           .from(scores)
           .where(whereConditions)
           .orderBy(orderByClause)
