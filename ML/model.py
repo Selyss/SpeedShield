@@ -73,28 +73,58 @@ def fit_model(features):
     # load given features and create engineered features
     X = pd.DataFrame(index=features.index)
     
+    # Speed risk calculation with null handling
     if 'avg_85th_percentile_speed' in features and 'avg_95th_percentile_speed' in features:
-        X['speed_risk'] = 0.5 * features['avg_85th_percentile_speed'] + 0.5 * features['avg_95th_percentile_speed']
+        speed_85th = pd.to_numeric(features['avg_85th_percentile_speed'], errors='coerce')
+        speed_95th = pd.to_numeric(features['avg_95th_percentile_speed'], errors='coerce')
+        if speed_85th.notna().any() and speed_95th.notna().any():
+            # Calculate speed risk using available data, fill NaN with median
+            speed_risk_vals = 0.5 * speed_85th + 0.5 * speed_95th
+            median_speed_risk = speed_risk_vals.median()
+            X['speed_risk'] = speed_risk_vals.fillna(median_speed_risk)
+            features['speed_risk'] = X['speed_risk']
     elif 'avg_speed' in features:
-        X['speed_risk'] = features['avg_speed']
+        avg_speed = pd.to_numeric(features['avg_speed'], errors='coerce')
+        if avg_speed.notna().any():
+            median_speed = avg_speed.median()
+            X['speed_risk'] = avg_speed.fillna(median_speed)
+            features['speed_risk'] = X['speed_risk']
     
+    # Volume risk calculation
     if 'avg_daily_vol' in features:
-        X['volume_risk'] = np.log1p(features['avg_daily_vol'])
+        volume = pd.to_numeric(features['avg_daily_vol'], errors='coerce')
+        if volume.notna().any():
+            # Use log1p for volume risk, fill NaN with median volume first
+            median_volume = volume.median()
+            volume_filled = volume.fillna(median_volume)
+            X['volume_risk'] = np.log1p(volume_filled)
+            features['volume_risk'] = X['volume_risk']
     
+    # Collision history (always present)
     X['collision_history'] = np.log1p(features['collision_count'])
+    features['collision_history'] = X['collision_history']
     
+    # Heavy vehicle percentage with null handling
     if 'avg_heavy_pct' in features:
-        X['heavy_share'] = features['avg_heavy_pct']
+        heavy_pct = pd.to_numeric(features['avg_heavy_pct'], errors='coerce')
+        if heavy_pct.notna().any():
+            # For heavy percentage, fill NaN with 0 (assuming no heavy vehicles if not reported)
+            X['heavy_share'] = heavy_pct.fillna(0)
+            features['heavy_share'] = X['heavy_share']
     
+    # School proximity
     if 'near_school' in features:
         X['near_school'] = features['near_school'].astype(int)
     
+    # School zone and combined school risk
     if 'in_school_zone' in features:
         X['in_school_zone'] = features['in_school_zone'].astype(int)
         # create a combined school risk factor that considers both proximity and designation
         school_risk = features['near_school'].astype(int) + features['in_school_zone'].astype(int)
         X['school_risk_factor'] = np.minimum(school_risk, 2)  # cap at 2 for sites that are both near schools AND in zones
+        features['school_risk_factor'] = X['school_risk_factor']
     
+    # Retirement home proximity and vulnerable population risk
     if 'near_retirement_home' in features:
         X['near_retirement_home'] = features['near_retirement_home'].astype(int)
         # create a combined vulnerable population risk factor (schools + retirement homes)
@@ -104,15 +134,14 @@ def fit_model(features):
         if 'near_retirement_home' in features:
             vulnerable_pop_risk += features['near_retirement_home'].astype(int) * 0.8  # weight retirement homes slightly less than schools
         X['vulnerable_population_risk'] = vulnerable_pop_risk
+        features['vulnerable_population_risk'] = X['vulnerable_population_risk']
     
+    # Enforcement gap calculation
     if 'dist_to_nearest_camera' in features and 'cameras_within_500m' in features:
         X['enforcement_gap'] = features['dist_to_nearest_camera'] / (1 + features['cameras_within_500m'])
+        features['enforcement_gap'] = X['enforcement_gap']
 
-    # send metrics back to features for output
-    for col in X.columns:
-        features[col] = X[col]
-
-    # remoive nan values
+    # Remove NaN values and prepare for model training
     X = X.dropna(axis=1, how='all')
     X = X.fillna(0)
 
