@@ -52,10 +52,10 @@ export const MARKER_TYPES: Record<string, MarkerType> = {
         icon: cameraIcon,
         description: "Traffic cameras and surveillance cameras"
     },
-    DEFAULT: {
-        icon: defaultIcon,
-        description: "Default marker type for general use"
-    },
+    // DEFAULT: {
+    //     icon: defaultIcon,
+    //     description: "Default marker type for general use"
+    // },
         
 } as const;
 
