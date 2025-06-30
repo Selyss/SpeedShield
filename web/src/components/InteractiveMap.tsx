@@ -251,10 +251,9 @@ const MapContent = dynamic(
 export default function InteractiveMap() {
   const [selectedData, setSelectedData] = useState<DialogData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [resetTrigger] = useState(0);
-  const [selectedRiskCategories, setSelectedRiskCategories] = useState<
+  const [resetTrigger] = useState(0);  const [selectedRiskCategories, setSelectedRiskCategories] = useState<
     RiskCategory[]
-  >([...RISK_CATEGORIES]);
+  >(RISK_CATEGORIES.filter(category => category !== "Low"));
   const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
   const [page, setPage] = useState(1);
   const [allScores, setAllScores] = useState<SimpleScore[]>([]);
@@ -410,8 +409,8 @@ export default function InteractiveMap() {
         />{" "}
         <div className="mt-4">
           <p>
-            Showing <strong>{allScores.length}</strong> of{" "}
-            <strong>{totalCount}</strong> points
+            Cached <strong>{allScores.length}</strong> of{" "}
+            <strong>{totalCount}</strong> points available in the current area
           </p>
           {paginatedQuery.isFetching && (
             <div className="mt-2 text-sm text-blue-600">
