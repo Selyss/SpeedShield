@@ -272,7 +272,6 @@ export default function InteractiveMap() {
   );
 
   const utils = api.useUtils();
-
   useEffect(() => {
     if (paginatedQuery.data) {
       const newData = paginatedQuery.data.data;
@@ -286,18 +285,32 @@ export default function InteractiveMap() {
       setHasMore(paginatedQuery.data.pagination.hasMore);
     }
   }, [paginatedQuery.data]);
+  // Auto-load more data when we have room for more and data is available
+  useEffect(() => {
+    const shouldAutoLoad = 
+      hasMore && 
+      !paginatedQuery.isFetching && 
+      allScores.length > 0 && // Only after initial load
+      currentBounds; // Only when bounds are set
+    
+    if (shouldAutoLoad) {
+      const timer = setTimeout(() => {
+        setPage(prevPage => prevPage + 1);
+      }, 500); // 500ms delay between auto-loads
+      
+      return () => clearTimeout(timer);
+    }
+  }, [hasMore, paginatedQuery.isFetching, allScores.length, currentBounds]);
 
   const handleLoadMore = () => {
     if (hasMore && !paginatedQuery.isFetching) {
       setPage(prevPage => prevPage + 1);
     }
-  };
-
-  const handleBoundsChange = useCallback((bounds: LatLngBounds) => {
+  };  const handleBoundsChange = useCallback((bounds: LatLngBounds) => {
     setCurrentBounds(bounds);
     // Reset pagination when bounds change but keep existing scores
     setPage(1);
-  }, []);  const showDialog = async (data: DialogData) => {
+  }, []);const showDialog = async (data: DialogData) => {
     setSelectedData(data);
     setIsDialogOpen(true);
     
@@ -374,17 +387,27 @@ export default function InteractiveMap() {
         <h3 className="text-lg font-bold">Safety Score Filters</h3>        <RiskCategoryFilter
           selectedCategories={selectedRiskCategories}
           onCategoriesChange={handleRiskCategoryChange}
-        />
-        <div className="mt-4">
+        />        <div className="mt-4">
           <p>Showing <strong>{allScores.length}</strong> of <strong>{totalCount}</strong> points</p>
-          {hasMore && (
+          {paginatedQuery.isFetching && (
+            <div className="mt-2 text-sm text-blue-600">
+              Auto-loading more data...
+            </div>
+          )}
+          {hasMore && !paginatedQuery.isFetching && (
             <Button 
               onClick={handleLoadMore} 
               disabled={paginatedQuery.isFetching}
               className="mt-2 w-full"
+              variant="outline"
             >
-              {paginatedQuery.isFetching ? "Loading..." : "Load More"}
+              Load More (Manual)
             </Button>
+          )}
+          {!hasMore && allScores.length > 0 && (
+            <div className="mt-2 text-sm text-green-600">
+              ✓ All data loaded ({allScores.length} points)
+            </div>
           )}
         </div>
       </div>
