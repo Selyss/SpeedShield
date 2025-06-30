@@ -36,7 +36,7 @@ type SimpleScore = {
 };
 
 const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
-const zoom = 13; // Default zoom level
+const zoom = 14; // Default zoom level
 
 interface DialogData
   extends Record<string, string | number | boolean | Date | null | undefined> {
