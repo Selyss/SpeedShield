@@ -36,7 +36,7 @@ type SimpleScore = {
 };
 
 const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
-const zoom = 14; // Default zoom level
+const zoom = 13; // Default zoom level
 
 interface DialogData
   extends Record<string, string | number | boolean | Date | null | undefined> {
@@ -347,14 +347,34 @@ export default function InteractiveMap() {
             ...data,
             "Final Score": scoreDetails.final_score,
             "Predicted Risk": scoreDetails.predicted_risk,
+            "Risk Percentile": scoreDetails.risk_percentile,
+            "Risk Category": scoreDetails.risk_category,
             "Collision Count": scoreDetails.collision_count,
             "Speed Risk": scoreDetails.speed_risk,
+            "Speed Risk Percentile": scoreDetails.speed_risk_percentile,
+            "Speed Risk Category": scoreDetails.speed_risk_category,
             "Volume Risk": scoreDetails.volume_risk,
+            "Volume Risk Percentile": scoreDetails.volume_risk_percentile,
+            "Volume Risk Category": scoreDetails.volume_risk_category,
+            "Collision History": scoreDetails.collision_history,
+            "Collision History Percentile": scoreDetails.collision_history_percentile,
+            "Collision History Category": scoreDetails.collision_history_category,
+            "Heavy Share": scoreDetails.heavy_share,
+            "Heavy Share Percentile": scoreDetails.heavy_share_percentile,
+            "Heavy Share Category": scoreDetails.heavy_share_category,
             "Near School": scoreDetails.near_school,
             "In School Zone": scoreDetails.in_school_zone,
+            "Near Retirement Home": scoreDetails.near_retirement_home,
+            "School Risk Factor": scoreDetails.school_risk_factor,
+            "Vulnerable Population Risk": scoreDetails.vulnerable_population_risk,
             "Has Camera": scoreDetails.has_camera,
+            "Camera Score": scoreDetails.camera_score,
+            "Vehicle Kilometers": scoreDetails.veh_km,
+            "Average Daily Volume": scoreDetails.avg_daily_vol,
             "Average Speed": scoreDetails.avg_speed,
             "85th Percentile Speed": scoreDetails.avg_85th_percentile_speed,
+            "95th Percentile Speed": scoreDetails.avg_95th_percentile_speed,
+            "Average Heavy Percentage": scoreDetails.avg_heavy_pct,
           });
         }
       } catch (error) {

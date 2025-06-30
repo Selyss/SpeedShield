@@ -69,6 +69,10 @@ export const scores = createTable(
     vulnerable_population_risk: d.real(),
     camera_score: d.doublePrecision(),
     final_score: d.doublePrecision(),
+    speed_risk_percentile: d.doublePrecision(),
+    heavy_share_percentile: d.doublePrecision(),
+    speed_risk_category: d.text(),
+    heavy_share_category: d.text(),
   }),
   (t) => [
     // Composite primary key on longitude, latitude
