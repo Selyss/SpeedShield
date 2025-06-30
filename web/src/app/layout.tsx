@@ -7,7 +7,7 @@ import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
   title: "Speed Shield",
-  description: "bruh",
+  description: "AI-driven traffic safety recommendations and risk mapping.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 
