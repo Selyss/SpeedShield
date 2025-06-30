@@ -219,19 +219,6 @@ const MapContent = dynamic(
                   {renderSafetyScores(safetyScores, selectedRiskCategories, dialogHandler)}
                 </LayerGroup>
               </LayersControl.Overlay>
-
-              <LayersControl.Overlay checked name="Existing Cameras">
-                {/* PLACEHOLDER */}
-                <Circle
-                  center={center}
-                  radius={300}
-                  pathOptions={{
-                    color: "red",
-                    fillColor: "red",
-                    fillOpacity: 0.1,
-                  }}
-                />
-              </LayersControl.Overlay>
             </LayersControl>
             {/* <MapClickHandler onMapClick={dialogHandler} /> */}
             <MapBoundsHandler onBoundsChange={onBoundsChange} />

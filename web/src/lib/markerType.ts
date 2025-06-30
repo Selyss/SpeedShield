@@ -48,7 +48,7 @@ export const MARKER_TYPES: Record<string, MarkerType> = {
         icon: schoolIcon,
         description: "French separate schools"
     },
-    CAMERA: {
+    EXISTING_CAMERA: {
         icon: cameraIcon,
         description: "Traffic cameras and surveillance cameras"
     },
