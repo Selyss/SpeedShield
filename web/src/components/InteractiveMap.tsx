@@ -13,7 +13,7 @@ import { RiskCategoryFilter } from "~/components/ui/risk-category-filter";
 import { api } from "~/trpc/react";
 import { Circle, LayerGroup, LayersControl } from "react-leaflet";
 import { useMap } from "react-leaflet";
-import type { Marker, Score } from "~/server/db/schema";
+import type { Marker } from "~/server/db/schema";
 
 import type { LatLngTuple, LatLngBounds } from "leaflet";
 import {
@@ -27,6 +27,14 @@ import {
   shouldShowRiskCategory,
   type RiskCategory,
 } from "~/lib/safetyScores";
+
+// Type for simplified score data returned by getScores endpoint
+type SimpleScore = {
+  latitude: number;
+  longitude: number;
+  risk_category: string | null;
+};
+
 const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
 const zoom = 13; // Default zoom level
 
@@ -90,10 +98,8 @@ const MapContent = dynamic(
           },
         });
         return null;
-      }
-
-      function renderSafetyScores(
-        scores: Score[],
+      }      function renderSafetyScores(
+        scores: SimpleScore[],
         selectedCategories: RiskCategory[],
         dialogHandler: (data: DialogData) => void,
       ) {
@@ -120,16 +126,6 @@ const MapContent = dynamic(
                     latitude: score.latitude,
                     longitude: score.longitude,
                     "Risk Category": score.risk_category,
-                    "Final Score": score.final_score,
-                    "Predicted Risk": score.predicted_risk,
-                    "Collision Count": score.collision_count,
-                    "Speed Risk": score.speed_risk,
-                    "Volume Risk": score.volume_risk,
-                    "Near School": score.near_school,
-                    "In School Zone": score.in_school_zone,
-                    "Has Camera": score.has_camera,
-                    "Average Speed": score.avg_speed,
-                    "85th Percentile Speed": score.avg_85th_percentile_speed,
                   }),
               }}
             />
@@ -188,7 +184,7 @@ const MapContent = dynamic(
         dialogHandler: (data: DialogData) => void;
         resetTrigger: number;
         selectedRiskCategories: RiskCategory[];
-        safetyScores: Score[];
+        safetyScores: SimpleScore[];
         onBoundsChange: (bounds: LatLngBounds) => void;
       }) {
         return (
@@ -248,15 +244,14 @@ const MapContent = dynamic(
 export default function InteractiveMap() {
   const [selectedData, setSelectedData] = useState<DialogData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [resetTrigger, setResetTrigger] = useState(0);
+  const [resetTrigger] = useState(0);
   const [selectedRiskCategories, setSelectedRiskCategories] = useState<RiskCategory[]>([...RISK_CATEGORIES]);
-  const [safetyScores, setSafetyScores] = useState<Score[]>([]);
   const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
   const [page, setPage] = useState(1);
-  const [allScores, setAllScores] = useState<Score[]>([]);
+  const [allScores, setAllScores] = useState<SimpleScore[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-
+  const [isLoadingScoreDetails, setIsLoadingScoreDetails] = useState(false);
   const paginatedQuery = api.scores.getScores.useQuery(
     {
       bounds: currentBounds ? {
@@ -272,9 +267,10 @@ export default function InteractiveMap() {
     {
       enabled: !!currentBounds, // Only run when bounds are available
       staleTime: 1000 * 60 * 5, // 5 minutes
-      keepPreviousData: true,
     }
   );
+
+  const utils = api.useUtils();
 
   useEffect(() => {
     if (paginatedQuery.data) {
@@ -300,11 +296,41 @@ export default function InteractiveMap() {
     setCurrentBounds(bounds);
     // Reset pagination when bounds change but keep existing scores
     setPage(1);
-  }, []);
-
-  const showDialog = (data: DialogData) => {
+  }, []);  const showDialog = async (data: DialogData) => {
     setSelectedData(data);
     setIsDialogOpen(true);
+    
+    // If this is a safety score marker, fetch the detailed information
+    if (data.title?.includes("Safety Score") && data.latitude && data.longitude) {
+      setIsLoadingScoreDetails(true);
+      try {
+        const scoreDetails = await utils.scores.getScoreDetails.fetch({
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
+        });
+        
+        // Update the dialog data with the complete score information
+        if (scoreDetails) {
+          setSelectedData({
+            ...data,
+            "Final Score": scoreDetails.final_score,
+            "Predicted Risk": scoreDetails.predicted_risk,
+            "Collision Count": scoreDetails.collision_count,
+            "Speed Risk": scoreDetails.speed_risk,
+            "Volume Risk": scoreDetails.volume_risk,
+            "Near School": scoreDetails.near_school,
+            "In School Zone": scoreDetails.in_school_zone,
+            "Has Camera": scoreDetails.has_camera,
+            "Average Speed": scoreDetails.avg_speed,
+            "85th Percentile Speed": scoreDetails.avg_85th_percentile_speed,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch score details:", error);
+      } finally {
+        setIsLoadingScoreDetails(false);
+      }
+    }
   };
 
   const handleRiskCategoryChange = (categories: RiskCategory[]) => {
@@ -344,10 +370,9 @@ export default function InteractiveMap() {
         onBoundsChange={handleBoundsChange}
       />
       <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white bg-opacity-80 p-4 shadow-lg">
-        <h3 className="text-lg font-bold">Safety Score Filters</h3>
-        <RiskCategoryFilter
+        <h3 className="text-lg font-bold">Safety Score Filters</h3>        <RiskCategoryFilter
           selectedCategories={selectedRiskCategories}
-          onChange={handleRiskCategoryChange}
+          onCategoriesChange={handleRiskCategoryChange}
         />
         <div className="mt-4">
           <p>Showing <strong>{allScores.length}</strong> of <strong>{totalCount}</strong> points</p>
@@ -363,10 +388,14 @@ export default function InteractiveMap() {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">          <DialogHeader>
             <DialogTitle>{selectedData?.title ?? "Data"}</DialogTitle>
           </DialogHeader>
+          {isLoadingScoreDetails && (
+            <div className="flex items-center justify-center py-4">
+              <div className="text-sm text-gray-600">Loading detailed score information...</div>
+            </div>
+          )}
           {selectedData && (
             <div className="space-y-4">
               {Object.entries(selectedData)

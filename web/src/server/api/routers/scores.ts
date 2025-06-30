@@ -229,4 +229,26 @@ export const scoresRouter = createTRPCRouter({
         total: totalCount[0]?.count ?? 0,
       };
     }),
+
+  getScoreDetails: publicProcedure
+    .input(z.object({
+      latitude: z.number(),
+      longitude: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const score = await ctx.db
+        .select()
+        .from(scores)
+        .where(and(
+          sql`${scores.latitude} = ${input.latitude}`,
+          sql`${scores.longitude} = ${input.longitude}`
+        ))
+        .limit(1);
+
+      if (score.length === 0) {
+        throw new Error("Score not found for the given coordinates");
+      }
+
+      return score[0];
+    }),
 });
