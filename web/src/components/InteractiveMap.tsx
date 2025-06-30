@@ -253,7 +253,7 @@ export default function InteractiveMap() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [resetTrigger] = useState(0);  const [selectedRiskCategories, setSelectedRiskCategories] = useState<
     RiskCategory[]
-  >(RISK_CATEGORIES.filter(category => category !== "Low"));
+  >(RISK_CATEGORIES.filter(category => category !== "Low" && category !== "Medium")); // Default to High, Very High, Critical
   const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
   const [page, setPage] = useState(1);
   const [allScores, setAllScores] = useState<SimpleScore[]>([]);
@@ -346,33 +346,33 @@ export default function InteractiveMap() {
           setSelectedData({
             ...data,
             "Final Score": scoreDetails.final_score,
-            "Predicted Risk": scoreDetails.predicted_risk,
+            // "Predicted Risk": scoreDetails.predicted_risk,
             "Risk Percentile": scoreDetails.risk_percentile,
             "Risk Category": scoreDetails.risk_category,
             "Collision Count": scoreDetails.collision_count,
-            "Speed Risk": scoreDetails.speed_risk,
+            // "Speed Risk": scoreDetails.speed_risk,
             "Speed Risk Percentile": scoreDetails.speed_risk_percentile,
             "Speed Risk Category": scoreDetails.speed_risk_category,
-            "Volume Risk": scoreDetails.volume_risk,
+            // "Volume Risk": scoreDetails.volume_risk,
             "Volume Risk Percentile": scoreDetails.volume_risk_percentile,
             "Volume Risk Category": scoreDetails.volume_risk_category,
             "Collision History": scoreDetails.collision_history,
             "Collision History Percentile": scoreDetails.collision_history_percentile,
             "Collision History Category": scoreDetails.collision_history_category,
-            "Heavy Share": scoreDetails.heavy_share,
-            "Heavy Share Percentile": scoreDetails.heavy_share_percentile,
-            "Heavy Share Category": scoreDetails.heavy_share_category,
-            "Near School": scoreDetails.near_school,
-            "In School Zone": scoreDetails.in_school_zone,
-            "Near Retirement Home": scoreDetails.near_retirement_home,
-            "School Risk Factor": scoreDetails.school_risk_factor,
+            // "Heavy Share": scoreDetails.heavy_share,
+            // "Heavy Share Percentile": scoreDetails.heavy_share_percentile,
+            // "Heavy Share Category": scoreDetails.heavy_share_category,
+            // "Near School": scoreDetails.near_school,
+            // "In School Zone": scoreDetails.in_school_zone,
+            // "Near Retirement Home": scoreDetails.near_retirement_home,
+            // "School Risk Factor": scoreDetails.school_risk_factor,
             "Vulnerable Population Risk": scoreDetails.vulnerable_population_risk,
             "Has Camera": scoreDetails.has_camera,
-            "Camera Score": scoreDetails.camera_score,
+            // "Camera Score": scoreDetails.camera_score,
             "Vehicle Kilometers": scoreDetails.veh_km,
             "Average Daily Volume": scoreDetails.avg_daily_vol,
             "Average Speed": scoreDetails.avg_speed,
-            "85th Percentile Speed": scoreDetails.avg_85th_percentile_speed,
+            // "85th Percentile Speed": scoreDetails.avg_85th_percentile_speed,
             "95th Percentile Speed": scoreDetails.avg_95th_percentile_speed,
             "Average Heavy Percentage": scoreDetails.avg_heavy_pct,
           });
@@ -470,7 +470,7 @@ export default function InteractiveMap() {
           {selectedData && (
             <div className="space-y-4">
               {Object.entries(selectedData)
-                .filter(([key]) => key !== "title") // Don't show title in the content
+                .filter(([key, value]) => key !== "title" && key !== "latitude" && key !== "longitude" && !!value) // Don't show title in the content
                 .map(([key, value]) => (
                   <div key={key} className="space-y-2">
                     <div className="text-sm text-gray-600 capitalize">
