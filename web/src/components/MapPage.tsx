@@ -13,11 +13,8 @@ const InteractiveMap = dynamic(() => import("~/components/InteractiveMap"), {
 	),
 });
 
-export default function MapPage() {
-	const [hello] = api.hello.hello.useSuspenseQuery({ text: "aaron" });
-	
+export default function MapPage() {	
 	return <>
-	<p>hi {hello.greeting}</p>
 	<InteractiveMap />
 	</>;
 }
