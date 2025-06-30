@@ -47,24 +47,11 @@ export const scoresRouter = createTRPCRouter({
 
       const whereConditions = conditions.length > 0 ? and(...conditions) : undefined;
 
-      // If loadAll is true and we're dealing with a map view, load data in a balanced way
-      let orderByClause;
-      if (input.loadAll && input.bounds) {
-        // For map rendering, use a more balanced ordering to ensure all risk categories are represented
-        orderByClause = sql`
-          CASE ${scores.risk_category}
-            WHEN 'Critical' THEN RANDOM() * 0.1
-            WHEN 'Very High' THEN RANDOM() * 0.2 + 0.1
-            WHEN 'High' THEN RANDOM() * 0.3 + 0.3
-            WHEN 'Medium' THEN RANDOM() * 0.2 + 0.6
-            WHEN 'Low' THEN RANDOM() * 0.2 + 0.8
-            ELSE RANDOM()
-          END
-        `;
-      } else {
-        // Default ordering by highest risk first
-        orderByClause = desc(scores.final_score);
-      }
+      // When fetching for the map, we want a more balanced result set
+      // that doesn't just show the highest risk scores.
+      const orderByClause = input.bounds
+        ? sql`RANDOM()`
+        : desc(scores.final_score);
 
       const [data, totalCountResult] = await Promise.all([
         ctx.db

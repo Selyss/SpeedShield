@@ -252,37 +252,66 @@ export default function InteractiveMap() {
   const [selectedRiskCategories, setSelectedRiskCategories] = useState<RiskCategory[]>([...RISK_CATEGORIES]);
   const [safetyScores, setSafetyScores] = useState<Score[]>([]);
   const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
+  const [page, setPage] = useState(1);
+  const [allScores, setAllScores] = useState<Score[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
-  // Balanced view for map rendering with good performance
-  const balancedQuery = api.scores.getScoresForMap.useQuery(
+  const paginatedQuery = api.scores.getScores.useQuery(
     {
       bounds: currentBounds ? {
         north: currentBounds.getNorth(),
         south: currentBounds.getSouth(),
         east: currentBounds.getEast(),
         west: currentBounds.getWest(),
-      } : { north: 0, south: 0, east: 0, west: 0 },
+      } : undefined,
       riskCategories: selectedRiskCategories,
-      maxPerCategory: 300, // Increased to show more variety
+      limit: 500, // Fetch 500 at a time
+      offset: (page - 1) * 500,
     },
     {
-      enabled: !!currentBounds,
-      staleTime: 1000 * 60 * 5,
+      enabled: !!currentBounds, // Only run when bounds are available
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      keepPreviousData: true,
     }
   );
 
-  // Handle data updates
   useEffect(() => {
-    if (balancedQuery.data?.data) {
-      setSafetyScores(balancedQuery.data.data);
+    if (paginatedQuery.data) {
+      const newData = paginatedQuery.data.data;
+      // Append new, unique scores to the list
+      setAllScores(prevScores => {
+        const existingIds = new Set(prevScores.map(s => `${s.latitude}-${s.longitude}`));
+        const uniqueNewScores = newData.filter(s => !existingIds.has(`${s.latitude}-${s.longitude}`));
+        return [...prevScores, ...uniqueNewScores];
+      });
+      setTotalCount(paginatedQuery.data.pagination.total);
+      setHasMore(paginatedQuery.data.pagination.hasMore);
     }
-  }, [balancedQuery.data]);
+  }, [paginatedQuery.data]);
+
+  const handleLoadMore = () => {
+    if (hasMore && !paginatedQuery.isFetching) {
+      setPage(prevPage => prevPage + 1);
+    }
+  };
 
   const handleBoundsChange = useCallback((bounds: LatLngBounds) => {
     setCurrentBounds(bounds);
-  }, []);  const showDialog = (data: DialogData) => {
+    // Reset pagination when bounds change but keep existing scores
+    setPage(1);
+  }, []);
+
+  const showDialog = (data: DialogData) => {
     setSelectedData(data);
     setIsDialogOpen(true);
+  };
+
+  const handleRiskCategoryChange = (categories: RiskCategory[]) => {
+    setSelectedRiskCategories(categories);
+    // Reset pagination when filters change
+    setPage(1);
+    setAllScores([]);
   };
 
   const copyToClipboard = async (text: string) => {
@@ -299,58 +328,42 @@ export default function InteractiveMap() {
     if (value === null || value === undefined) {
       return "N/A";
     }
-    if (value instanceof Date) {
-      return value.toLocaleDateString();
-    }
-    if (typeof value === "number") {
-      // Format numbers with up to 6 decimal places if they're coordinates
-      return value.toFixed(6).replace(/\.?0+$/, "");
-    }
     if (typeof value === "boolean") {
       return value ? "Yes" : "No";
     }
     return String(value);
   };
-  return (
-    <>
-      <div className="h-screen w-full relative">
-        <div className="absolute left-4 top-4 z-10 space-y-2">
-          <RiskCategoryFilter
-            selectedCategories={selectedRiskCategories}
-            onCategoriesChange={setSelectedRiskCategories}
-          />
 
-          {/* Data Stats */}
-          {balancedQuery.data && (
-            <div className="rounded-lg border bg-background p-3 shadow-sm text-sm">
-              <div className="text-xs text-muted-foreground">Map Data</div>
-              <div>Showing: {balancedQuery.data.sampledCount} points</div>
-              <div>Total in area: {balancedQuery.data.total}</div>
-              {balancedQuery.isLoading && (
-                <div className="text-blue-600">Loading...</div>
-              )}
-            </div>
+  return (
+    <div className="relative h-screen w-full">
+      <MapContent
+        dialogHandler={showDialog}
+        resetTrigger={resetTrigger}
+        selectedRiskCategories={selectedRiskCategories}
+        safetyScores={allScores} // Use allScores for rendering
+        onBoundsChange={handleBoundsChange}
+      />
+      <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white bg-opacity-80 p-4 shadow-lg">
+        <h3 className="text-lg font-bold">Safety Score Filters</h3>
+        <RiskCategoryFilter
+          selectedCategories={selectedRiskCategories}
+          onChange={handleRiskCategoryChange}
+        />
+        <div className="mt-4">
+          <p>Showing <strong>{allScores.length}</strong> of <strong>{totalCount}</strong> points</p>
+          {hasMore && (
+            <Button 
+              onClick={handleLoadMore} 
+              disabled={paginatedQuery.isFetching}
+              className="mt-2 w-full"
+            >
+              {paginatedQuery.isFetching ? "Loading..." : "Load More"}
+            </Button>
           )}
         </div>
-        
-        <Button
-          onClick={() => setResetTrigger((t) => t + 1)}
-          variant="outline"
-          size="sm"
-          className="absolute right-4 bottom-4 z-10"
-        >
-          Reset View
-        </Button>
-        <MapContent 
-          dialogHandler={showDialog} 
-          resetTrigger={resetTrigger}
-          selectedRiskCategories={selectedRiskCategories}
-          safetyScores={safetyScores}
-          onBoundsChange={handleBoundsChange}
-        />
-      </div>{" "}
+      </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{selectedData?.title ?? "Data"}</DialogTitle>
           </DialogHeader>
@@ -413,6 +426,6 @@ export default function InteractiveMap() {
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
