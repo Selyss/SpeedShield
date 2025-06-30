@@ -272,7 +272,7 @@ export default function InteractiveMap() {
           }
         : undefined,
       riskCategories: selectedRiskCategories,
-      limit: 500, // Fetch 500 at a time
+      limit: 10000, // Fetch 500 at a time
       offset: (page - 1) * 500,
     },
     {

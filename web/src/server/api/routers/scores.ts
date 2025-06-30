@@ -6,7 +6,7 @@ import { sql, count, and, gte, lte, inArray, desc } from "drizzle-orm";
 export const scoresRouter = createTRPCRouter({
   getScores: publicProcedure
     .input(z.object({
-      limit: z.number().min(1).max(1000).default(500),
+      limit: z.number().min(1).max(10000).default(500),
       offset: z.number().min(0).default(0),
       bounds: z.object({
         north: z.number(),
