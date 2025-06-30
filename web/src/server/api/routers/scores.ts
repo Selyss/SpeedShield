@@ -17,6 +17,7 @@ export const scoresRouter = createTRPCRouter({
       riskCategories: z.array(z.enum(["Low", "Medium", "High", "Very High", "Critical"])).optional(),
       minScore: z.number().min(0).max(1).optional(),
       maxScore: z.number().min(0).max(1).optional(),
+      loadAll: z.boolean().default(false), // New parameter to load all data in chunks
     }))
     .query(async ({ ctx, input }) => {
       const conditions = [];
@@ -46,12 +47,31 @@ export const scoresRouter = createTRPCRouter({
 
       const whereConditions = conditions.length > 0 ? and(...conditions) : undefined;
 
+      // If loadAll is true and we're dealing with a map view, load data in a balanced way
+      let orderByClause;
+      if (input.loadAll && input.bounds) {
+        // For map rendering, use a more balanced ordering to ensure all risk categories are represented
+        orderByClause = sql`
+          CASE ${scores.risk_category}
+            WHEN 'Critical' THEN RANDOM() * 0.1
+            WHEN 'Very High' THEN RANDOM() * 0.2 + 0.1
+            WHEN 'High' THEN RANDOM() * 0.3 + 0.3
+            WHEN 'Medium' THEN RANDOM() * 0.2 + 0.6
+            WHEN 'Low' THEN RANDOM() * 0.2 + 0.8
+            ELSE RANDOM()
+          END
+        `;
+      } else {
+        // Default ordering by highest risk first
+        orderByClause = desc(scores.final_score);
+      }
+
       const [data, totalCountResult] = await Promise.all([
         ctx.db
           .select()
           .from(scores)
           .where(whereConditions)
-          .orderBy(desc(scores.final_score)) // Order by highest risk first
+          .orderBy(orderByClause)
           .limit(input.limit)
           .offset(input.offset),
         ctx.db
@@ -78,6 +98,58 @@ export const scoresRouter = createTRPCRouter({
           minScore: input.minScore,
           maxScore: input.maxScore,
         },
+      };
+    }),
+
+  // New endpoint specifically for map rendering that ensures balanced representation
+  getScoresForMap: publicProcedure
+    .input(z.object({
+      bounds: z.object({
+        north: z.number(),
+        south: z.number(),
+        east: z.number(),
+        west: z.number(),
+      }),
+      riskCategories: z.array(z.enum(["Low", "Medium", "High", "Very High", "Critical"])).optional(),
+      maxPerCategory: z.number().min(1).max(500).default(200), // Max points per risk category
+    }))
+    .query(async ({ ctx, input }) => {
+      const conditions = [
+        gte(scores.latitude, input.bounds.south),
+        lte(scores.latitude, input.bounds.north),
+        gte(scores.longitude, input.bounds.west),
+        lte(scores.longitude, input.bounds.east)
+      ];
+
+      // Add risk category filtering
+      if (input.riskCategories && input.riskCategories.length > 0) {
+        conditions.push(inArray(scores.risk_category, input.riskCategories));
+      }
+
+      const whereConditions = and(...conditions);      // Get balanced sample from each risk category
+      const categoryQueries = (input.riskCategories ?? ["Low", "Medium", "High", "Very High", "Critical"]).map(category => 
+        ctx.db
+          .select()
+          .from(scores)
+          .where(and(whereConditions, sql`${scores.risk_category} = ${category}`))
+          .orderBy(sql`RANDOM()`) // Random sampling for visual distribution
+          .limit(input.maxPerCategory)
+      );
+
+      const results = await Promise.all(categoryQueries);
+      const data = results.flat();
+
+      // Get total count for statistics
+      const totalCountResult = await ctx.db
+        .select({ count: count() })
+        .from(scores)
+        .where(whereConditions);
+
+      return {
+        data,
+        total: totalCountResult[0]?.count ?? 0,
+        sampledCount: data.length,
+        bounds: input.bounds,
       };
     }),
   getHighRiskScores: publicProcedure

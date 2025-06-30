@@ -250,38 +250,41 @@ export default function InteractiveMap() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [resetTrigger, setResetTrigger] = useState(0);
   const [selectedRiskCategories, setSelectedRiskCategories] = useState<RiskCategory[]>([...RISK_CATEGORIES]);
-  const [safetyScores, setSafetyScores] = useState<Score[]>([]);  const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
+  const [safetyScores, setSafetyScores] = useState<Score[]>([]);
+  const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
 
-  // API call to load safety scores for a given area
-  const loadScoresQuery = api.scores.getScores.useQuery(
+  // Balanced view for map rendering with good performance
+  const balancedQuery = api.scores.getScoresForMap.useQuery(
     {
-      limit: 1000,
       bounds: currentBounds ? {
         north: currentBounds.getNorth(),
         south: currentBounds.getSouth(),
         east: currentBounds.getEast(),
         west: currentBounds.getWest(),
-      } : undefined,
+      } : { north: 0, south: 0, east: 0, west: 0 },
       riskCategories: selectedRiskCategories,
-    },    {
+      maxPerCategory: 300, // Increased to show more variety
+    },
+    {
       enabled: !!currentBounds,
-      staleTime: 1000 * 60 * 10, // 10 minutes - data rarely changes
+      staleTime: 1000 * 60 * 5,
     }
   );
-  // Handle successful data loading and update scores when data changes
+
+  // Handle data updates
   useEffect(() => {
-    if (loadScoresQuery.data?.data) {
-      setSafetyScores(loadScoresQuery.data.data);
+    if (balancedQuery.data?.data) {
+      setSafetyScores(balancedQuery.data.data);
     }
-  }, [loadScoresQuery.data]);
+  }, [balancedQuery.data]);
 
   const handleBoundsChange = useCallback((bounds: LatLngBounds) => {
     setCurrentBounds(bounds);
-  }, []);
-  const showDialog = (data: DialogData) => {
+  }, []);  const showDialog = (data: DialogData) => {
     setSelectedData(data);
     setIsDialogOpen(true);
   };
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -311,12 +314,25 @@ export default function InteractiveMap() {
   return (
     <>
       <div className="h-screen w-full relative">
-        <div className="absolute left-4 top-4 z-10">
+        <div className="absolute left-4 top-4 z-10 space-y-2">
           <RiskCategoryFilter
             selectedCategories={selectedRiskCategories}
             onCategoriesChange={setSelectedRiskCategories}
           />
+
+          {/* Data Stats */}
+          {balancedQuery.data && (
+            <div className="rounded-lg border bg-background p-3 shadow-sm text-sm">
+              <div className="text-xs text-muted-foreground">Map Data</div>
+              <div>Showing: {balancedQuery.data.sampledCount} points</div>
+              <div>Total in area: {balancedQuery.data.total}</div>
+              {balancedQuery.isLoading && (
+                <div className="text-blue-600">Loading...</div>
+              )}
+            </div>
+          )}
         </div>
+        
         <Button
           onClick={() => setResetTrigger((t) => t + 1)}
           variant="outline"
