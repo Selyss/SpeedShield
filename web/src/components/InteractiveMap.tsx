@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import {
   Dialog,
@@ -9,20 +9,24 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { RiskCategoryFilter } from "~/components/ui/risk-category-filter";
 import { api } from "~/trpc/react";
-import L, { marker } from "leaflet";
 import { Circle, LayerGroup, LayersControl } from "react-leaflet";
 import { useMap } from "react-leaflet";
-import type { Marker } from "~/server/db/schema"; // Adjust the import path based on your project structure
-// Adjust the import path based on your project structure
+import type { Marker, Score } from "~/server/db/schema";
 
-import type { LatLngTuple } from "leaflet";
+import type { LatLngTuple, LatLngBounds } from "leaflet";
 import {
   getMarkerType,
   getMarkerTypeOptions,
-  MARKER_TYPES,
   type MarkerTypeId,
 } from "~/lib/markerType";
+import {
+  RISK_CATEGORIES,
+  getRiskCategoryColor,
+  shouldShowRiskCategory,
+  type RiskCategory,
+} from "~/lib/safetyScores";
 const center: LatLngTuple = [43.6532, -79.3832]; // Default center for the map (Toronto)
 const zoom = 13; // Default zoom level
 
@@ -31,7 +35,13 @@ interface DialogData
   title?: string;
 }
 
-const iconSize = 32; // Size of the icon in pixels
+interface LoadedArea {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+  scores: Score[];
+}
 
 function ResetMapView({
   center,
@@ -49,11 +59,49 @@ function ResetMapView({
   return null;
 }
 
+// Hook to manage loaded safety score areas
+function useLoadedAreas() {
+  const [loadedAreas, setLoadedAreas] = useState<LoadedArea[]>([]);
+
+  const isAreaLoaded = useCallback((bounds: { north: number; south: number; east: number; west: number }) => {
+    return loadedAreas.some(area => 
+      area.north >= bounds.north &&
+      area.south <= bounds.south &&
+      area.east >= bounds.east &&
+      area.west <= bounds.west
+    );
+  }, [loadedAreas]);
+
+  const addLoadedArea = useCallback((area: LoadedArea) => {
+    setLoadedAreas(prev => [...prev, area]);
+  }, []);
+
+  const getScoresInBounds = useCallback((bounds: { north: number; south: number; east: number; west: number }) => {
+    const allScores: Score[] = [];
+    loadedAreas.forEach(area => {
+      area.scores.forEach(score => {
+        if (
+          score.latitude >= bounds.south &&
+          score.latitude <= bounds.north &&
+          score.longitude >= bounds.west &&
+          score.longitude <= bounds.east
+        ) {
+          allScores.push(score);
+        }
+      });
+    });
+    return allScores;
+  }, [loadedAreas]);
+
+  return { isAreaLoaded, addLoadedArea, getScoresInBounds };
+}
+
 // Create a separate component for the map content that will be dynamically loaded
 const MapContent = dynamic(
   () =>
     import("react-leaflet").then((mod) => {
-      const { MapContainer, TileLayer, useMapEvents, Marker } = mod;
+      const { MapContainer, TileLayer, useMapEvents, Marker, CircleMarker } = mod;
+      
       function MapClickHandler({
         onMapClick,
       }: {
@@ -69,6 +117,68 @@ const MapContent = dynamic(
           },
         });
         return null;
+      }
+
+      function MapBoundsHandler({
+        onBoundsChange,
+      }: {
+        onBoundsChange: (bounds: LatLngBounds) => void;
+      }) {
+        const map = useMap();
+        
+        useMapEvents({
+          moveend: () => {
+            onBoundsChange(map.getBounds());
+          },
+          zoomend: () => {
+            onBoundsChange(map.getBounds());
+          },
+        });
+        return null;
+      }
+
+      function renderSafetyScores(
+        scores: Score[],
+        selectedCategories: RiskCategory[],
+        dialogHandler: (data: DialogData) => void,
+      ) {
+        return scores
+          .filter(score => 
+            score.risk_category && 
+            shouldShowRiskCategory(score.risk_category, selectedCategories)
+          )
+          .map((score, index) => (
+            <CircleMarker
+              key={`${score.longitude}-${score.latitude}-${index}`}
+              center={[score.latitude, score.longitude]}
+              radius={6}
+              pathOptions={{
+                color: getRiskCategoryColor(score.risk_category ?? "Medium"),
+                fillColor: getRiskCategoryColor(score.risk_category ?? "Medium"),
+                fillOpacity: 0.7,
+                weight: 2,
+              }}
+              eventHandlers={{
+                click: () =>
+                  dialogHandler({
+                    title: `Safety Score - ${score.risk_category}`,
+                    latitude: score.latitude,
+                    longitude: score.longitude,
+                    "Risk Category": score.risk_category,
+                    "Final Score": score.final_score,
+                    "Predicted Risk": score.predicted_risk,
+                    "Collision Count": score.collision_count,
+                    "Speed Risk": score.speed_risk,
+                    "Volume Risk": score.volume_risk,
+                    "Near School": score.near_school,
+                    "In School Zone": score.in_school_zone,
+                    "Has Camera": score.has_camera,
+                    "Average Speed": score.avg_speed,
+                    "85th Percentile Speed": score.avg_85th_percentile_speed,
+                  }),
+              }}
+            />
+          ));
       }
 
       function renderMarkerCategory(
@@ -113,14 +223,18 @@ const MapContent = dynamic(
             }}
           ></Marker>
         ));
-      }
-
-      return function Map({
+      }      return function Map({
         dialogHandler,
         resetTrigger,
+        selectedRiskCategories,
+        safetyScores,
+        onBoundsChange,
       }: {
         dialogHandler: (data: DialogData) => void;
         resetTrigger: number;
+        selectedRiskCategories: RiskCategory[];
+        safetyScores: Score[];
+        onBoundsChange: (bounds: LatLngBounds) => void;
       }) {
         return (
           <MapContainer
@@ -146,6 +260,12 @@ const MapContent = dynamic(
                 </LayersControl.Overlay>
               ))}
 
+              <LayersControl.Overlay checked name="Safety Scores">
+                <LayerGroup>
+                  {renderSafetyScores(safetyScores, selectedRiskCategories, dialogHandler)}
+                </LayerGroup>
+              </LayersControl.Overlay>
+
               <LayersControl.Overlay checked name="Existing Cameras">
                 {/* PLACEHOLDER */}
                 <Circle
@@ -159,7 +279,8 @@ const MapContent = dynamic(
                 />
               </LayersControl.Overlay>
             </LayersControl>
-            <MapClickHandler onMapClick={dialogHandler} />{" "}
+            <MapClickHandler onMapClick={dialogHandler} />
+            <MapBoundsHandler onBoundsChange={onBoundsChange} />
           </MapContainer>
         );
       };
@@ -172,12 +293,63 @@ const MapContent = dynamic(
 export default function InteractiveMap() {
   const [selectedData, setSelectedData] = useState<DialogData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isClient, setIsClient] = useState(false);
   const [resetTrigger, setResetTrigger] = useState(0);
+  const [selectedRiskCategories, setSelectedRiskCategories] = useState<RiskCategory[]>([...RISK_CATEGORIES]);
+  const [safetyScores, setSafetyScores] = useState<Score[]>([]);
+  const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
+  
+  const { isAreaLoaded, addLoadedArea, getScoresInBounds } = useLoadedAreas();
+  // API call to load safety scores for a given area
+  const loadScoresQuery = api.scores.getScores.useQuery(
+    {
+      limit: 1000,
+      bounds: currentBounds ? {
+        north: currentBounds.getNorth(),
+        south: currentBounds.getSouth(),
+        east: currentBounds.getEast(),
+        west: currentBounds.getWest(),
+      } : undefined,
+    },
+    {
+      enabled: !!currentBounds && !isAreaLoaded({
+        north: currentBounds.getNorth(),
+        south: currentBounds.getSouth(),
+        east: currentBounds.getEast(),
+        west: currentBounds.getWest(),
+      }),
+    }
+  );
+
+  // Handle successful data loading
+  useEffect(() => {
+    if (loadScoresQuery.data?.data && currentBounds) {
+      const area: LoadedArea = {
+        north: currentBounds.getNorth(),
+        south: currentBounds.getSouth(),
+        east: currentBounds.getEast(),
+        west: currentBounds.getWest(),
+        scores: loadScoresQuery.data.data,
+      };
+      addLoadedArea(area);
+      setSafetyScores(prev => [...prev, ...loadScoresQuery.data.data]);
+    }
+  }, [loadScoresQuery.data, currentBounds, addLoadedArea]);
+
+  const handleBoundsChange = useCallback((bounds: LatLngBounds) => {
+    setCurrentBounds(bounds);
+  }, []);
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
+    if (currentBounds) {
+      const visibleScores = getScoresInBounds({
+        north: currentBounds.getNorth(),
+        south: currentBounds.getSouth(),
+        east: currentBounds.getEast(),
+        west: currentBounds.getWest(),
+      });
+      setSafetyScores(visibleScores);
+    }
+  }, [currentBounds, getScoresInBounds]);
   const showDialog = (data: DialogData) => {
     setSelectedData(data);
     setIsDialogOpen(true);
@@ -208,10 +380,15 @@ export default function InteractiveMap() {
     }
     return String(value);
   };
-
   return (
     <>
-      <div className="h-screen w-full">
+      <div className="h-screen w-full relative">
+        <div className="absolute left-4 top-4 z-10">
+          <RiskCategoryFilter
+            selectedCategories={selectedRiskCategories}
+            onCategoriesChange={setSelectedRiskCategories}
+          />
+        </div>
         <Button
           onClick={() => setResetTrigger((t) => t + 1)}
           variant="outline"
@@ -220,7 +397,13 @@ export default function InteractiveMap() {
         >
           Reset View
         </Button>
-        <MapContent dialogHandler={showDialog} resetTrigger={resetTrigger} />
+        <MapContent 
+          dialogHandler={showDialog} 
+          resetTrigger={resetTrigger}
+          selectedRiskCategories={selectedRiskCategories}
+          safetyScores={safetyScores}
+          onBoundsChange={handleBoundsChange}
+        />
       </div>{" "}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md">
