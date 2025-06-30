@@ -80,14 +80,17 @@ const MapContent = dynamic(
           },
         });
         return null;
-      }
-
-      function MapBoundsHandler({
+      }      function MapBoundsHandler({
         onBoundsChange,
       }: {
         onBoundsChange: (bounds: LatLngBounds) => void;
       }) {
         const map = useMap();
+        
+        // Set initial bounds when map is ready
+        useEffect(() => {
+          onBoundsChange(map.getBounds());
+        }, [map, onBoundsChange]);
         
         useMapEvents({
           moveend: () => {
@@ -98,7 +101,7 @@ const MapContent = dynamic(
           },
         });
         return null;
-      }      function renderSafetyScores(
+      }function renderSafetyScores(
         scores: SimpleScore[],
         selectedCategories: RiskCategory[],
         dialogHandler: (data: DialogData) => void,
@@ -251,8 +254,7 @@ export default function InteractiveMap() {
   const [allScores, setAllScores] = useState<SimpleScore[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [isLoadingScoreDetails, setIsLoadingScoreDetails] = useState(false);
-  const paginatedQuery = api.scores.getScores.useQuery(
+  const [isLoadingScoreDetails, setIsLoadingScoreDetails] = useState(false);  const paginatedQuery = api.scores.getScores.useQuery(
     {
       bounds: currentBounds ? {
         north: currentBounds.getNorth(),
@@ -265,7 +267,6 @@ export default function InteractiveMap() {
       offset: (page - 1) * 500,
     },
     {
-      enabled: !!currentBounds, // Only run when bounds are available
       staleTime: 1000 * 60 * 5, // 5 minutes
     }
   );
