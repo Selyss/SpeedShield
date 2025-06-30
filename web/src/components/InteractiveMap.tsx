@@ -63,8 +63,9 @@ function ResetMapView({
 const MapContent = dynamic(
   () =>
     import("react-leaflet").then((mod) => {
-      const { MapContainer, TileLayer, useMapEvents, Marker, CircleMarker } = mod;
-      
+      const { MapContainer, TileLayer, useMapEvents, Marker, CircleMarker } =
+        mod;
+
       function MapClickHandler({
         onMapClick,
       }: {
@@ -80,18 +81,19 @@ const MapContent = dynamic(
           },
         });
         return null;
-      }      function MapBoundsHandler({
+      }
+      function MapBoundsHandler({
         onBoundsChange,
       }: {
         onBoundsChange: (bounds: LatLngBounds) => void;
       }) {
         const map = useMap();
-        
+
         // Set initial bounds when map is ready
         useEffect(() => {
           onBoundsChange(map.getBounds());
         }, [map, onBoundsChange]);
-        
+
         useMapEvents({
           moveend: () => {
             onBoundsChange(map.getBounds());
@@ -101,15 +103,17 @@ const MapContent = dynamic(
           },
         });
         return null;
-      }function renderSafetyScores(
+      }
+      function renderSafetyScores(
         scores: SimpleScore[],
         selectedCategories: RiskCategory[],
         dialogHandler: (data: DialogData) => void,
       ) {
         return scores
-          .filter(score => 
-            score.risk_category && 
-            shouldShowRiskCategory(score.risk_category, selectedCategories)
+          .filter(
+            (score) =>
+              score.risk_category &&
+              shouldShowRiskCategory(score.risk_category, selectedCategories),
           )
           .map((score, index) => (
             <CircleMarker
@@ -118,7 +122,9 @@ const MapContent = dynamic(
               radius={6}
               pathOptions={{
                 color: getRiskCategoryColor(score.risk_category ?? "Medium"),
-                fillColor: getRiskCategoryColor(score.risk_category ?? "Medium"),
+                fillColor: getRiskCategoryColor(
+                  score.risk_category ?? "Medium",
+                ),
                 fillOpacity: 0.7,
                 weight: 2,
               }}
@@ -150,14 +156,20 @@ const MapContent = dynamic(
           return null; // Handle loading state if needed
         }
         if (markers.isError) {
-          console.error(`Error loading markers for type: ${markerOption.label}`, markers.error);
+          console.error(
+            `Error loading markers for type: ${markerOption.label}`,
+            markers.error,
+          );
           return <div>Error loading markers</div>;
         }
         if (!markers.data || markers.data.length === 0) {
           console.log(`No markers found for type: ${markerOption.label}`);
           return null; // No markers to display
         }
-        console.log(`Loaded ${markers.data.length} markers for type: ${markerOption.label}`, markers.data);
+        console.log(
+          `Loaded ${markers.data.length} markers for type: ${markerOption.label}`,
+          markers.data,
+        );
 
         return markers.data.map((marker: Marker) => (
           <Marker
@@ -177,7 +189,8 @@ const MapContent = dynamic(
             }}
           ></Marker>
         ));
-      }      return function Map({
+      }
+      return function Map({
         dialogHandler,
         resetTrigger,
         selectedRiskCategories,
@@ -216,7 +229,11 @@ const MapContent = dynamic(
 
               <LayersControl.Overlay checked name="Safety Scores">
                 <LayerGroup>
-                  {renderSafetyScores(safetyScores, selectedRiskCategories, dialogHandler)}
+                  {renderSafetyScores(
+                    safetyScores,
+                    selectedRiskCategories,
+                    dialogHandler,
+                  )}
                 </LayerGroup>
               </LayersControl.Overlay>
             </LayersControl>
@@ -235,27 +252,32 @@ export default function InteractiveMap() {
   const [selectedData, setSelectedData] = useState<DialogData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [resetTrigger] = useState(0);
-  const [selectedRiskCategories, setSelectedRiskCategories] = useState<RiskCategory[]>([...RISK_CATEGORIES]);
+  const [selectedRiskCategories, setSelectedRiskCategories] = useState<
+    RiskCategory[]
+  >([...RISK_CATEGORIES]);
   const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
   const [page, setPage] = useState(1);
   const [allScores, setAllScores] = useState<SimpleScore[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [isLoadingScoreDetails, setIsLoadingScoreDetails] = useState(false);  const paginatedQuery = api.scores.getScores.useQuery(
+  const [isLoadingScoreDetails, setIsLoadingScoreDetails] = useState(false);
+  const paginatedQuery = api.scores.getScores.useQuery(
     {
-      bounds: currentBounds ? {
-        north: currentBounds.getNorth(),
-        south: currentBounds.getSouth(),
-        east: currentBounds.getEast(),
-        west: currentBounds.getWest(),
-      } : undefined,
+      bounds: currentBounds
+        ? {
+            north: currentBounds.getNorth(),
+            south: currentBounds.getSouth(),
+            east: currentBounds.getEast(),
+            west: currentBounds.getWest(),
+          }
+        : undefined,
       riskCategories: selectedRiskCategories,
       limit: 500, // Fetch 500 at a time
       offset: (page - 1) * 500,
     },
     {
       staleTime: 1000 * 60 * 5, // 5 minutes
-    }
+    },
   );
 
   const utils = api.useUtils();
@@ -263,9 +285,13 @@ export default function InteractiveMap() {
     if (paginatedQuery.data) {
       const newData = paginatedQuery.data.data;
       // Append new, unique scores to the list
-      setAllScores(prevScores => {
-        const existingIds = new Set(prevScores.map(s => `${s.latitude}-${s.longitude}`));
-        const uniqueNewScores = newData.filter(s => !existingIds.has(`${s.latitude}-${s.longitude}`));
+      setAllScores((prevScores) => {
+        const existingIds = new Set(
+          prevScores.map((s) => `${s.latitude}-${s.longitude}`),
+        );
+        const uniqueNewScores = newData.filter(
+          (s) => !existingIds.has(`${s.latitude}-${s.longitude}`),
+        );
         return [...prevScores, ...uniqueNewScores];
       });
       setTotalCount(paginatedQuery.data.pagination.total);
@@ -274,42 +300,48 @@ export default function InteractiveMap() {
   }, [paginatedQuery.data]);
   // Auto-load more data when we have room for more and data is available
   useEffect(() => {
-    const shouldAutoLoad = 
-      hasMore && 
-      !paginatedQuery.isFetching && 
+    const shouldAutoLoad =
+      hasMore &&
+      !paginatedQuery.isFetching &&
       allScores.length > 0 && // Only after initial load
       currentBounds; // Only when bounds are set
-    
+
     if (shouldAutoLoad) {
       const timer = setTimeout(() => {
-        setPage(prevPage => prevPage + 1);
+        setPage((prevPage) => prevPage + 1);
       }, 500); // 500ms delay between auto-loads
-      
+
       return () => clearTimeout(timer);
     }
   }, [hasMore, paginatedQuery.isFetching, allScores.length, currentBounds]);
 
   const handleLoadMore = () => {
     if (hasMore && !paginatedQuery.isFetching) {
-      setPage(prevPage => prevPage + 1);
+      setPage((prevPage) => prevPage + 1);
     }
-  };  const handleBoundsChange = useCallback((bounds: LatLngBounds) => {
+  };
+  const handleBoundsChange = useCallback((bounds: LatLngBounds) => {
     setCurrentBounds(bounds);
     // Reset pagination when bounds change but keep existing scores
     setPage(1);
-  }, []);const showDialog = async (data: DialogData) => {
+  }, []);
+  const showDialog = async (data: DialogData) => {
     setSelectedData(data);
     setIsDialogOpen(true);
-    
+
     // If this is a safety score marker, fetch the detailed information
-    if (data.title?.includes("Safety Score") && data.latitude && data.longitude) {
+    if (
+      data.title?.includes("Safety Score") &&
+      data.latitude &&
+      data.longitude
+    ) {
       setIsLoadingScoreDetails(true);
       try {
         const scoreDetails = await utils.scores.getScoreDetails.fetch({
           latitude: Number(data.latitude),
           longitude: Number(data.longitude),
         });
-        
+
         // Update the dialog data with the complete score information
         if (scoreDetails) {
           setSelectedData({
@@ -370,20 +402,25 @@ export default function InteractiveMap() {
         safetyScores={allScores} // Use allScores for rendering
         onBoundsChange={handleBoundsChange}
       />
-      <div className="absolute bottom-4 left-4 z-10 rounded-lg bg-white bg-opacity-80 p-4 shadow-lg">
-        <h3 className="text-lg font-bold">Safety Score Filters</h3>        <RiskCategoryFilter
+      <div className="bg-opacity-80 absolute bottom-4 left-4 z-10 rounded-lg bg-white p-4 shadow-lg">
+        <h3 className="text-lg font-bold">Safety Score Filters</h3>{" "}
+        <RiskCategoryFilter
           selectedCategories={selectedRiskCategories}
           onCategoriesChange={handleRiskCategoryChange}
-        />        <div className="mt-4">
-          <p>Showing <strong>{allScores.length}</strong> of <strong>{totalCount}</strong> points</p>
+        />{" "}
+        <div className="mt-4">
+          <p>
+            Showing <strong>{allScores.length}</strong> of{" "}
+            <strong>{totalCount}</strong> points
+          </p>
           {paginatedQuery.isFetching && (
             <div className="mt-2 text-sm text-blue-600">
               Auto-loading more data...
             </div>
           )}
           {hasMore && !paginatedQuery.isFetching && (
-            <Button 
-              onClick={handleLoadMore} 
+            <Button
+              onClick={handleLoadMore}
               disabled={paginatedQuery.isFetching}
               className="mt-2 w-full"
               variant="outline"
@@ -399,12 +436,16 @@ export default function InteractiveMap() {
         </div>
       </div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">          <DialogHeader>
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-md">
+          {" "}
+          <DialogHeader>
             <DialogTitle>{selectedData?.title ?? "Data"}</DialogTitle>
           </DialogHeader>
           {isLoadingScoreDetails && (
             <div className="flex items-center justify-center py-4">
-              <div className="text-sm text-gray-600">Loading detailed score information...</div>
+              <div className="text-sm text-gray-600">
+                Loading detailed score information...
+              </div>
             </div>
           )}
           {selectedData && (
