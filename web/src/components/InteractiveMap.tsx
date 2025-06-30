@@ -35,14 +35,6 @@ interface DialogData
   title?: string;
 }
 
-interface LoadedArea {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
-  scores: Score[];
-}
-
 function ResetMapView({
   center,
   zoom,
@@ -57,43 +49,6 @@ function ResetMapView({
     map.setView(center, zoom);
   }, [trigger, center, zoom, map]);
   return null;
-}
-
-// Hook to manage loaded safety score areas
-function useLoadedAreas() {
-  const [loadedAreas, setLoadedAreas] = useState<LoadedArea[]>([]);
-
-  const isAreaLoaded = useCallback((bounds: { north: number; south: number; east: number; west: number }) => {
-    return loadedAreas.some(area => 
-      area.north >= bounds.north &&
-      area.south <= bounds.south &&
-      area.east >= bounds.east &&
-      area.west <= bounds.west
-    );
-  }, [loadedAreas]);
-
-  const addLoadedArea = useCallback((area: LoadedArea) => {
-    setLoadedAreas(prev => [...prev, area]);
-  }, []);
-
-  const getScoresInBounds = useCallback((bounds: { north: number; south: number; east: number; west: number }) => {
-    const allScores: Score[] = [];
-    loadedAreas.forEach(area => {
-      area.scores.forEach(score => {
-        if (
-          score.latitude >= bounds.south &&
-          score.latitude <= bounds.north &&
-          score.longitude >= bounds.west &&
-          score.longitude <= bounds.east
-        ) {
-          allScores.push(score);
-        }
-      });
-    });
-    return allScores;
-  }, [loadedAreas]);
-
-  return { isAreaLoaded, addLoadedArea, getScoresInBounds };
 }
 
 // Create a separate component for the map content that will be dynamically loaded
@@ -295,10 +250,8 @@ export default function InteractiveMap() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [resetTrigger, setResetTrigger] = useState(0);
   const [selectedRiskCategories, setSelectedRiskCategories] = useState<RiskCategory[]>([...RISK_CATEGORIES]);
-  const [safetyScores, setSafetyScores] = useState<Score[]>([]);
-  const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
-  
-  const { isAreaLoaded, addLoadedArea, getScoresInBounds } = useLoadedAreas();
+  const [safetyScores, setSafetyScores] = useState<Score[]>([]);  const [currentBounds, setCurrentBounds] = useState<LatLngBounds | null>(null);
+
   // API call to load safety scores for a given area
   const loadScoresQuery = api.scores.getScores.useQuery(
     {
@@ -309,47 +262,22 @@ export default function InteractiveMap() {
         east: currentBounds.getEast(),
         west: currentBounds.getWest(),
       } : undefined,
-    },
-    {
-      enabled: !!currentBounds && !isAreaLoaded({
-        north: currentBounds.getNorth(),
-        south: currentBounds.getSouth(),
-        east: currentBounds.getEast(),
-        west: currentBounds.getWest(),
-      }),
+      riskCategories: selectedRiskCategories,
+    },    {
+      enabled: !!currentBounds,
+      staleTime: 1000 * 60 * 10, // 10 minutes - data rarely changes
     }
   );
-
-  // Handle successful data loading
+  // Handle successful data loading and update scores when data changes
   useEffect(() => {
-    if (loadScoresQuery.data?.data && currentBounds) {
-      const area: LoadedArea = {
-        north: currentBounds.getNorth(),
-        south: currentBounds.getSouth(),
-        east: currentBounds.getEast(),
-        west: currentBounds.getWest(),
-        scores: loadScoresQuery.data.data,
-      };
-      addLoadedArea(area);
-      setSafetyScores(prev => [...prev, ...loadScoresQuery.data.data]);
+    if (loadScoresQuery.data?.data) {
+      setSafetyScores(loadScoresQuery.data.data);
     }
-  }, [loadScoresQuery.data, currentBounds, addLoadedArea]);
+  }, [loadScoresQuery.data]);
 
   const handleBoundsChange = useCallback((bounds: LatLngBounds) => {
     setCurrentBounds(bounds);
   }, []);
-
-  useEffect(() => {
-    if (currentBounds) {
-      const visibleScores = getScoresInBounds({
-        north: currentBounds.getNorth(),
-        south: currentBounds.getSouth(),
-        east: currentBounds.getEast(),
-        west: currentBounds.getWest(),
-      });
-      setSafetyScores(visibleScores);
-    }
-  }, [currentBounds, getScoresInBounds]);
   const showDialog = (data: DialogData) => {
     setSelectedData(data);
     setIsDialogOpen(true);
